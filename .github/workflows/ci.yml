@@ -39,6 +39,8 @@ jobs:
           php -l bin/pressready
           php -l bin/gen-wp-deprecations.php
           php -l Pressready/Sniffs/WordPress/DeprecatedSniff.php
+          php -l Pressready/CLI/Command.php
+          php -l wp-cli.php
 
       - name: Confirm the Pressready standard is registered
         run: vendor/bin/phpcs -i | grep -q Pressready

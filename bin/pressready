@@ -419,7 +419,7 @@ function header_label( string $path ): ?string {
 	foreach ( $files as $f ) {
 		$head = (string) file_get_contents( $f, false, null, 0, 8192 );
 		if ( preg_match( '/(?:Plugin|Theme)\s+Name:\s*(.+)/i', $head, $n ) ) {
-			$label = trim( $n[1] );
+			$label = trim( preg_replace( '#\s*\*/.*$#', '', $n[1] ) ); // Drop a trailing `*/` from inline-comment headers.
 			if ( preg_match( '/Version:\s*([0-9][^\s*]*)/i', $head, $v ) ) {
 				$label .= ' ' . trim( $v[1] );
 			}

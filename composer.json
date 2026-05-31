@@ -15,7 +15,11 @@
     "autoload": {
         "psr-4": {
             "Pressready\\": "Pressready/"
-        }
+        },
+        "files": ["wp-cli.php"]
+    },
+    "extra": {
+        "commands": ["pressready scan"]
     },
     "config": {
         "allow-plugins": {

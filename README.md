@@ -71,6 +71,24 @@ vendor/bin/pressready --php=8.4 --wp=6.9 --baseline --fail-on=fatal
 `--fail-on`: `fatal` · `risky` · `deprecated` (any finding).
 `--baseline[=file]` suppresses known findings · `--generate-baseline[=file]` writes one.
 
+## On a live site (WP-CLI)
+
+Pressready also ships a `wp pressready` command — same engine, run from the WordPress root,
+defaulting to the site's `wp-content`. It runs *before* WordPress boots (no database needed):
+
+```bash
+# Register the command (or add wp-cli.php to your project's wp-cli.yml `require:`).
+wp --require=vendor/itzmekhokan/pressready/wp-cli.php pressready scan --php=8.4 --wp=6.9
+
+# Scan a specific directory; choose an output format.
+wp pressready scan wp-content/plugins --php=8.4 --format=table
+wp pressready scan --wp=6.9 --format=json
+```
+
+The scan target is a **positional** argument (WP-CLI reserves `--path` for the install dir).
+`--format`: `table` (default) · `summary` · `json` · `csv` · `yaml` · `count`. `--fail-on`
+exits non-zero for CI just like the standalone CLI.
+
 ---
 
 ## How it works
@@ -256,6 +274,24 @@ Verified end-to-end against a real multi-component `wp-content` (Akismet, Classi
 Hello Dolly, a theme, an mu-plugin): correct attribution; baseline suppresses all known
 findings and surfaces only newly-introduced ones; `--fail-on=fatal` over a baseline gates CI.
 
+## Phase 5 — the `wp pressready` command  ✅
+
+Wraps the same engine as a WP-CLI command (the original WP-CLI-first vision, like Crate), so
+it runs on a live site from the WordPress root with `wp-content` as the default target. See
+[On a live site](#on-a-live-site-wp-cli) above.
+
+- `Pressready\CLI\Command` (`Pressready/CLI/Command.php`) is a thin adapter over `bin/pressready`
+  — Phases 2–4 stay the single source of truth — that renders results the WP-CLI way (tables,
+  `--format`, proper non-zero exit via `WP_CLI::halt`).
+- Registered `before_wp_load` via `wp-cli.php`, so it needs **no database or booted WordPress**
+  (readiness scanning is static). The package's `composer.json` files-autoloads `wp-cli.php`
+  (a guarded no-op outside WP-CLI) and declares `extra.commands`.
+- Verified end-to-end against real WP-CLI 2.8: `table`/`summary`/`json`/`csv`/`count` formats,
+  positional path, and `--fail-on=fatal` exit gating.
+
+> Distribution to WP.org / `wp package install` (with the Plugin Check pass) is deliberately
+> deferred — Pressready ships now as a GitHub + Composer developer tool.
+
 ## Roadmap
 
 | Phase | Scope | Status |
@@ -264,5 +300,5 @@ findings and surfaces only newly-introduced ones; `--fail-on=fatal` over a basel
 | 2 | `scan` sniff + reporter (grouped/summary/json), version gate + delta, exit codes | ✅ done |
 | 3 | `--php=` via bundled PHPCompatibility; unified severity model (fatal/risky/php/wp) | ✅ done |
 | 4 | Per-component attribution, baseline, `--format=github`, ignore annotations | ✅ done |
-| 5 | Wrap as `wp … pressready`; distribution: Composer + WP.org, Plugin Check clean | planned |
-| 6+ | DataViews admin report; fix-hint links; Update Safety Net (sequel) | planned |
+| 5 | `wp pressready` WP-CLI command (before_wp_load, table/json/csv/…) | ✅ done |
+| 6+ | DataViews admin report; fix-hint links; Update Safety Net (sequel); WP.org distribution | planned |

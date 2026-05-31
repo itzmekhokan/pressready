@@ -60,5 +60,12 @@ check( 0 === $rc2, '--fail-on=fatal exits 0 when no fatal' );
 exec( "$bin --path=tests/fixtures/sample.php > /dev/null 2>&1", $_o3, $rc3 );
 check( 2 === $rc3, 'missing --php/--wp exits 2' );
 
+// 6. The WP-CLI command class loads and exposes scan() (registerable by wp-cli.php).
+require_once __DIR__ . '/../Pressready/CLI/Command.php';
+check(
+	class_exists( 'Pressready\\CLI\\Command' ) && method_exists( 'Pressready\\CLI\\Command', 'scan' ),
+	'WP-CLI command Pressready\\CLI\\Command::scan() is defined'
+);
+
 echo $failures ? "\nSMOKE FAILED ($failures)\n" : "\nALL SMOKE TESTS PASSED\n";
 exit( $failures ? 1 : 0 );
