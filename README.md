@@ -1,5 +1,8 @@
 # Pressready
 
+[![CI](https://github.com/itzmekhokan/pressready/actions/workflows/ci.yml/badge.svg)](https://github.com/itzmekhokan/pressready/actions/workflows/ci.yml)
+[![License: GPL v2+](https://img.shields.io/badge/license-GPL--2.0--or--later-blue.svg)](LICENSE)
+
 > **Is your WordPress press-ready for the next PHP/WordPress version?**
 > Scan a site's whole installed stack — every third-party plugin and theme, not just
 > your own code — and find out exactly what breaks *before* you upgrade.
