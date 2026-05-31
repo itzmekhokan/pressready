@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<ruleset name="Pressready">
+    <description>WordPress upgrade-readiness checks: flags usage of deprecated core APIs against a target WordPress version.</description>
+
+    <!--
+        All sniffs under this standard's Sniffs/ directory are auto-loaded.
+        Target version is supplied at runtime via the PRESSREADY_WP environment
+        variable (and optional PRESSREADY_WP_SINCE for a delta scan), set by the
+        `pressready` wrapper / `wp … pressready` command.
+    -->
+</ruleset>

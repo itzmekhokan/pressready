@@ -1,0 +1,594 @@
+#!/usr/bin/env php
+<?php
+/**
+ * pressready — driver around the PHPCS Pressready + PHPCompatibility standards.
+ *
+ * Runs both engines in a single PHPCS pass over a path, then groups findings by
+ * the owning plugin/theme (rather than by file) and prints one upgrade-readiness
+ * report with a unified severity model:
+ *
+ *   - PHP removed-in-target  → FATAL  (the upgrade will break here)
+ *   - PHP deprecated-in-target → notice (still runs; emits a PHP deprecation)
+ *   - WP deprecated-in-target  → notice (still runs; tech debt / WP notice)
+ *
+ * This is the engine the future `wp … pressready` WP-CLI command will reuse.
+ *
+ * Usage:
+ *   pressready [--php=8.4] [--wp=6.9] [--since=6.4] [--path=.]
+ *              [--format=grouped|json|summary|github] [--fail-on=fatal|risky|deprecated]
+ *              [--baseline[=file]] [--generate-baseline[=file]]
+ *
+ * At least one of --php or --wp is required.
+ *
+ * Baseline (adopt on a legacy site without drowning in pre-existing findings):
+ *   pressready --php=8.4 --wp=6.9 --generate-baseline   # snapshot today's findings
+ *   pressready --php=8.4 --wp=6.9 --baseline            # then only NEW findings show/fail
+ *
+ * Per-finding suppression also works via native PHPCS comments, e.g.
+ *   create_function(...); // phpcs:ignore PHPCompatibility
+ *
+ * @package Pressready
+ */
+
+const PRESSREADY_BASELINE = '.pressready-baseline.json';
+
+main( $argv );
+
+/**
+ * Entry point.
+ *
+ * @param string[] $argv CLI arguments.
+ */
+function main( array $argv ): void {
+	$opts   = parse_opts( $argv );
+	$root   = realpath( $opts['path'] ?? getcwd() );
+	$php    = $opts['php'] ?? '';
+	$wp     = $opts['wp'] ?? '';
+	$since  = $opts['since'] ?? '';
+	$format = $opts['format'] ?? 'grouped';
+	$pkg    = dirname( __DIR__ ); // This package's root (holds Pressready/ + the dataset).
+
+	if ( '' === $php && '' === $wp ) {
+		fwrite( STDERR, "error: specify at least one target — --php=<ver> and/or --wp=<ver>\n" );
+		exit( 2 );
+	}
+	if ( false === $root ) {
+		fwrite( STDERR, "error: --path does not exist\n" );
+		exit( 2 );
+	}
+
+	$phpcs = find_phpcs();
+	if ( null === $phpcs ) {
+		fwrite( STDERR, "error: PHP_CodeSniffer not found (run `composer install`)\n" );
+		exit( 2 );
+	}
+
+	// Assemble the standard list: WP side (Pressready) when --wp is given, PHP
+	// side (PHPCompatibilityWP) when --php is given. Both run in one PHPCS pass.
+	$standards = array();
+	if ( '' !== $wp ) {
+		$standards[] = $pkg . '/Pressready/ruleset.xml';
+	}
+	if ( '' !== $php ) {
+		$standards[] = 'PHPCompatibilityWP';
+	}
+
+	// PHPCS appends a timing footer to stdout with --report=json, so write the
+	// report to a temp file (clean JSON) and read it back.
+	$report = tempnam( sys_get_temp_dir(), 'pressready-' );
+
+	$args = array(
+		'--standard=' . implode( ',', $standards ),
+		'--report-json=' . $report,
+		'--extensions=php',
+	);
+	if ( '' !== $php ) {
+		// testVersion is the PHP version the site will run on; PHPCompatibility
+		// reports everything removed/deprecated by then.
+		$args[] = '--runtime-set';
+		$args[] = 'testVersion';
+		$args[] = $php;
+	}
+	$args[] = $root;
+
+	$cmd = sprintf(
+		'PRESSREADY_WP=%s PRESSREADY_WP_SINCE=%s %s %s',
+		escapeshellarg( $wp ),
+		escapeshellarg( $since ),
+		escapeshellarg( PHP_BINARY ) . ' ' . escapeshellarg( $phpcs ),
+		implode( ' ', array_map( 'escapeshellarg', $args ) )
+	);
+
+	shell_exec( $cmd . ' 2>/dev/null' );
+	$json = is_file( $report ) ? file_get_contents( $report ) : '';
+	@unlink( $report );
+	$data = json_decode( (string) $json, true );
+	if ( ! is_array( $data ) || ! isset( $data['files'] ) ) {
+		fwrite( STDERR, "error: scan produced no parseable output\n" );
+		exit( 2 );
+	}
+
+	// Generate-baseline mode: snapshot the current findings and exit. Adopt the
+	// tool on a legacy site without drowning — only NEW findings fail CI after.
+	if ( isset( $opts['generate-baseline'] ) ) {
+		$path = ( '1' === $opts['generate-baseline'] ) ? getcwd() . '/' . PRESSREADY_BASELINE : $opts['generate-baseline'];
+		$n    = generate_baseline( $data, $root, $path );
+		fwrite( STDOUT, "Wrote baseline ($n finding" . ( 1 === $n ? '' : 's' ) . ") to $path\n" );
+		exit( 0 );
+	}
+
+	// Apply a baseline (--baseline[=path]) to suppress already-known findings.
+	$suppressed = 0;
+	if ( isset( $opts['baseline'] ) ) {
+		$path = ( '1' === $opts['baseline'] ) ? getcwd() . '/' . PRESSREADY_BASELINE : $opts['baseline'];
+		if ( ! is_file( $path ) ) {
+			fwrite( STDERR, "error: baseline not found: $path\n" );
+			exit( 2 );
+		}
+		list( $data, $suppressed ) = apply_baseline( $data, $root, $path );
+	}
+
+	// GitHub Actions: emit workflow commands so findings annotate the PR inline.
+	if ( 'github' === $format ) {
+		render_github( $data );
+		exit( exit_code( tally( regroup( $data, $root ) ), $opts ) );
+	}
+
+	$grouped               = regroup( $data, $root );
+	$tally                 = tally( $grouped );
+	$tally['suppressed']   = $suppressed;
+
+	if ( 'json' === $format ) {
+		echo json_encode(
+			array( 'tally' => $tally, 'components' => $grouped ),
+			JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES
+		) . "\n";
+		exit( exit_code( $tally, $opts ) );
+	}
+
+	render( $grouped, $tally, $root, $php, $wp, $since, $format );
+	exit( exit_code( $tally, $opts ) );
+}
+
+/**
+ * A baseline signature for a finding: stable across line moves / reordering.
+ * Keyed by the sniff source plus the message with line numbers neutralised.
+ *
+ * @param array $m PHPCS message.
+ * @return string
+ */
+function baseline_signature( array $m ): string {
+	$msg = preg_replace( '/\bline \d+/', 'line N', $m['message'] ?? '' );
+	return ( $m['source'] ?? '' ) . '|' . $msg;
+}
+
+/**
+ * Write a baseline snapshot of the current findings.
+ *
+ * Findings are keyed by scan-root-relative path → signature → count (PHPStan
+ * style), so the baseline is portable and tolerant of line shifts.
+ *
+ * @param array  $data PHPCS JSON report.
+ * @param string $root Scan root.
+ * @param string $path Destination file.
+ * @return int Number of findings recorded.
+ */
+function generate_baseline( array $data, string $root, string $path ): int {
+	$findings = array();
+	$total    = 0;
+	foreach ( $data['files'] as $file => $info ) {
+		if ( empty( $info['messages'] ) ) {
+			continue;
+		}
+		$rel = ltrim( str_replace( $root, '', $file ), '/' );
+		foreach ( $info['messages'] as $m ) {
+			$sig = baseline_signature( $m );
+			$findings[ $rel ][ $sig ] = ( $findings[ $rel ][ $sig ] ?? 0 ) + 1;
+			++$total;
+		}
+	}
+	$out = array(
+		'schema'       => 1,
+		'generated_at' => gmdate( 'c' ),
+		'findings'     => $findings,
+	);
+	file_put_contents( $path, json_encode( $out, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n" );
+	return $total;
+}
+
+/**
+ * Subtract baselined findings from the report, leaving only new ones.
+ *
+ * @param array  $data PHPCS JSON report.
+ * @param string $root Scan root.
+ * @param string $path Baseline file.
+ * @return array{0:array,1:int} [filtered data, number suppressed]
+ */
+function apply_baseline( array $data, string $root, string $path ): array {
+	$baseline   = json_decode( (string) file_get_contents( $path ), true );
+	$budget     = $baseline['findings'] ?? array();
+	$suppressed = 0;
+
+	foreach ( $data['files'] as $file => &$info ) {
+		if ( empty( $info['messages'] ) ) {
+			continue;
+		}
+		$rel  = ltrim( str_replace( $root, '', $file ), '/' );
+		$kept = array();
+		foreach ( $info['messages'] as $m ) {
+			$sig = baseline_signature( $m );
+			if ( ( $budget[ $rel ][ $sig ] ?? 0 ) > 0 ) {
+				--$budget[ $rel ][ $sig ];
+				++$suppressed;
+				continue; // Known finding — drop it.
+			}
+			$kept[] = $m;
+		}
+		$info['messages'] = $kept;
+		$info['errors']   = count( array_filter( $kept, static fn( $x ) => 'ERROR' === $x['type'] ) );
+		$info['warnings'] = count( $kept ) - $info['errors'];
+	}
+	unset( $info );
+	return array( $data, $suppressed );
+}
+
+/**
+ * Emit GitHub Actions workflow commands (one annotation per finding).
+ *
+ * @param array $data PHPCS JSON report (possibly baseline-filtered).
+ * @return void
+ */
+function render_github( array $data ): void {
+	$cwd = getcwd();
+	foreach ( $data['files'] as $file => $info ) {
+		if ( empty( $info['messages'] ) ) {
+			continue;
+		}
+		$rel = ( $cwd && str_starts_with( $file, $cwd . '/' ) ) ? substr( $file, strlen( $cwd ) + 1 ) : $file;
+		foreach ( $info['messages'] as $m ) {
+			$sev = severity_of( $m );
+			$cmd = 'fatal' === $sev ? 'error' : 'warning';
+			printf(
+				"::%s file=%s,line=%d,title=%s::%s\n",
+				$cmd,
+				gh_escape_prop( $rel ),
+				$m['line'],
+				gh_escape_prop( 'Pressready (' . $sev . ')' ),
+				gh_escape_data( $m['message'] )
+			);
+		}
+	}
+}
+
+/**
+ * Escape a GitHub workflow-command message body.
+ *
+ * @param string $s Raw string.
+ * @return string
+ */
+function gh_escape_data( string $s ): string {
+	return strtr( $s, array( '%' => '%25', "\r" => '%0D', "\n" => '%0A' ) );
+}
+
+/**
+ * Escape a GitHub workflow-command property value.
+ *
+ * @param string $s Raw string.
+ * @return string
+ */
+function gh_escape_prop( string $s ): string {
+	return strtr( $s, array( '%' => '%25', "\r" => '%0D', "\n" => '%0A', ',' => '%2C', ':' => '%3A' ) );
+}
+
+/**
+ * Tally findings by severity across all components.
+ *
+ * @param array $components Grouped findings.
+ * @return array{fatal:int,risky:int,php:int,wp:int,total:int}
+ */
+function tally( array $components ): array {
+	$t = array( 'fatal' => 0, 'risky' => 0, 'php' => 0, 'wp' => 0, 'total' => 0 );
+	foreach ( $components as $c ) {
+		foreach ( $c['files'] as $findings ) {
+			foreach ( $findings as $f ) {
+				++$t[ $f['severity'] ];
+				++$t['total'];
+			}
+		}
+	}
+	return $t;
+}
+
+/**
+ * Group PHPCS findings by owning plugin/theme component.
+ *
+ * @param array  $data PHPCS JSON report.
+ * @param string $root Scan root.
+ * @return array<string,array> Components keyed by id, each with label + findings.
+ */
+function regroup( array $data, string $root ): array {
+	$components = array();
+	foreach ( $data['files'] as $file => $info ) {
+		if ( empty( $info['messages'] ) ) {
+			continue;
+		}
+		list( $id, $label, $base ) = component_of( $file, $root );
+		if ( ! isset( $components[ $id ] ) ) {
+			$components[ $id ] = array( 'label' => $label, 'dir' => $base, 'count' => 0, 'fatal' => 0, 'files' => array() );
+		}
+		$rel = ltrim( str_replace( $base, '', $file ), '/' );
+		if ( '' === $rel ) {
+			$rel = basename( $file ); // Single-file component (e.g. plugins/hello.php).
+		}
+		foreach ( $info['messages'] as $m ) {
+			$severity = severity_of( $m );
+			$components[ $id ]['files'][ $rel ][] = array(
+				'line'     => $m['line'],
+				'severity' => $severity,
+				'source'   => $m['source'],
+				'message'  => $m['message'],
+			);
+			++$components[ $id ]['count'];
+			if ( 'fatal' === $severity ) {
+				++$components[ $id ]['fatal'];
+			}
+		}
+	}
+	// Sort: most fatals first, then most findings.
+	uasort(
+		$components,
+		static fn( $a, $b ) => ( $b['fatal'] <=> $a['fatal'] ) ?: ( $b['count'] <=> $a['count'] )
+	);
+	return $components;
+}
+
+/**
+ * Classify a finding into the unified severity model.
+ *
+ *   fatal  PHP symbol/extension removed by the target version — a call to an
+ *          undefined function/class, i.e. a real Fatal error on upgrade.
+ *   risky  Other PHPCompatibility errors: behavioural / correctness changes
+ *          (e.g. func_get_args() semantics since 7.0) that run but may misbehave.
+ *   php    PHP feature deprecated (not yet removed) by the target version.
+ *   wp     WordPress core API deprecated by the target WP version.
+ *
+ * Not every PHPCompatibility ERROR is a runtime fatal — only removals are. We
+ * key the fatal verdict on the "removed since PHP" wording PHPCompatibility
+ * emits precisely when a symbol is gone at the target version.
+ *
+ * @param array $m PHPCS message (has 'type', 'source', 'message').
+ * @return string 'fatal' | 'risky' | 'php' | 'wp'.
+ */
+function severity_of( array $m ): string {
+	if ( ! str_starts_with( $m['source'] ?? '', 'PHPCompatibility' ) ) {
+		return 'wp'; // Pressready sniff — a WP deprecation (always a warning).
+	}
+	if ( false !== strpos( $m['message'] ?? '', 'removed since PHP' ) ) {
+		return 'fatal'; // Symbol is gone at the target version → undefined-symbol fatal.
+	}
+	if ( 'ERROR' === ( $m['type'] ?? '' ) ) {
+		return 'risky'; // Behavioural/correctness change PHPCompatibility flags as an error.
+	}
+	return 'php'; // PHP deprecation warning.
+}
+
+/**
+ * Identify the plugin/theme/core component a file belongs to.
+ *
+ * Handles the real-world `wp-content` layout: multi-file plugins/themes (a slug
+ * directory), single-file plugins (`plugins/hello.php`, `mu-plugins/loader.php`),
+ * and WordPress core itself (`wp-admin`/`wp-includes`).
+ *
+ * @param string $file Absolute file path.
+ * @param string $root Scan root.
+ * @return array{0:string,1:string,2:string} [id, label, base-path-for-rel]
+ */
+function component_of( string $file, string $root ): array {
+	// A plugin/theme/mu-plugin — the segment after plugins|mu-plugins|themes is
+	// either a slug dir (multi-file) or a single file. Either way it's one component.
+	if ( preg_match( '#^(.*/wp-content/(?:plugins|mu-plugins|themes)/[^/]+)#', $file, $m ) ) {
+		$path = $m[1];
+		return array( $path, header_label( $path ) ?? basename( $path ), $path );
+	}
+	// WordPress core itself — group everything under one "WordPress core" bucket,
+	// with paths shown relative to the install root (e.g. wp-includes/foo.php).
+	if ( preg_match( '#^(.*)/(wp-admin|wp-includes)/#', $file, $m ) ) {
+		return array( '__core__', 'WordPress core', $m[1] );
+	}
+	// Otherwise treat the whole scan root as one component.
+	return array( $root, header_label( $root ) ?? basename( $root ), $root );
+}
+
+/**
+ * Read a "Plugin Name"/"Theme Name" (+ Version) header from a component, which
+ * may be a directory (multi-file plugin/theme) or a single file (single-file
+ * plugin / mu-plugin).
+ *
+ * @param string $path Component directory or file.
+ * @return string|null Label like "bbPress 2.6.14", or null if no header found.
+ */
+function header_label( string $path ): ?string {
+	if ( is_file( $path ) ) {
+		$files = array( $path );
+	} else {
+		$files = glob( $path . '/*.php' ) ?: array();
+		if ( is_file( $path . '/style.css' ) ) {
+			$files[] = $path . '/style.css';
+		}
+	}
+	foreach ( $files as $f ) {
+		$head = (string) file_get_contents( $f, false, null, 0, 8192 );
+		if ( preg_match( '/(?:Plugin|Theme)\s+Name:\s*(.+)/i', $head, $n ) ) {
+			$label = trim( $n[1] );
+			if ( preg_match( '/Version:\s*([0-9][^\s*]*)/i', $head, $v ) ) {
+				$label .= ' ' . trim( $v[1] );
+			}
+			return $label;
+		}
+	}
+	return null;
+}
+
+/**
+ * Render the grouped report.
+ *
+ * @param array  $components Grouped findings.
+ * @param array  $tally      Severity tally.
+ * @param string $root       Scan root.
+ * @param string $php        Target PHP version.
+ * @param string $wp         Target WP version.
+ * @param string $since      Optional since version.
+ * @param string $format     'grouped' or 'summary'.
+ */
+function render( array $components, array $tally, string $root, string $php, string $wp, string $since, string $format ): void {
+	$total  = $tally['total'];
+	$fatals = $tally['fatal'];
+
+	$targets = array();
+	if ( '' !== $php ) {
+		$targets[] = "PHP $php";
+	}
+	if ( '' !== $wp ) {
+		$targets[] = $since ? "WP $since → $wp" : "WP $wp";
+	}
+	$scope = implode( ' + ', $targets );
+
+	echo "\n";
+	echo "  Pressready — WordPress upgrade readiness — target $scope\n";
+	echo "  Scanned: $root\n";
+
+	$suppressed_note = ! empty( $tally['suppressed'] )
+		? sprintf( '  (%d suppressed by baseline)', $tally['suppressed'] )
+		: '';
+
+	if ( 0 === $total ) {
+		printf( "\n  ✓ Nothing blocks this upgrade.%s\n\n", $suppressed_note );
+		return;
+	}
+
+	foreach ( $components as $c ) {
+		$badge = $c['fatal'] > 0 ? sprintf( '  ✗ %d fatal', $c['fatal'] ) : '';
+		printf( "\n  ▶ %s  —  %d finding%s%s\n", $c['label'], $c['count'], 1 === $c['count'] ? '' : 's', $badge );
+		if ( 'summary' === $format ) {
+			continue;
+		}
+		foreach ( $c['files'] as $rel => $findings ) {
+			echo "      $rel\n";
+			foreach ( $findings as $f ) {
+				printf( "        %5d  %-7s %s\n", $f['line'], '[' . $f['severity'] . ']', compact_message( $f['message'] ) );
+			}
+		}
+	}
+
+	$bits = array();
+	if ( $tally['fatal'] > 0 ) {
+		$bits[] = sprintf( '%d fatal', $tally['fatal'] );
+	}
+	if ( $tally['risky'] > 0 ) {
+		$bits[] = sprintf( '%d risky', $tally['risky'] );
+	}
+	$deprecations = $tally['php'] + $tally['wp'];
+	if ( $deprecations > 0 ) {
+		$bits[] = sprintf( '%d deprecation%s', $deprecations, 1 === $deprecations ? '' : 's' );
+	}
+
+	if ( $fatals > 0 ) {
+		$verdict = '  ✗ Upgrade will break — fix fatals first.';
+	} elseif ( $tally['risky'] > 0 ) {
+		$verdict = '  ⚠ No fatals, but review the risky behaviour changes before upgrading.';
+	} else {
+		$verdict = '  ✓ No fatals — safe to upgrade; clear deprecations at leisure.';
+	}
+
+	printf(
+		"\n  %s across %d component%s.%s%s\n\n",
+		implode( ', ', $bits ),
+		count( $components ),
+		1 === count( $components ) ? '' : 's',
+		$verdict,
+		$suppressed_note
+	);
+}
+
+/**
+ * Shorten a sniff message for the compact listing.
+ *
+ * @param string $message Full sniff message.
+ * @return string
+ */
+function compact_message( string $message ): string {
+	// WP-side phrasing.
+	$message = preg_replace( '/ is deprecated since WordPress /', ' — deprecated WP ', $message );
+	// PHP-side phrasing.
+	$message = preg_replace( '/ is deprecated since PHP .*? and removed since PHP /', ' — removed PHP ', $message );
+	$message = preg_replace( '/ is deprecated since PHP /', ' — deprecated PHP ', $message );
+	// Collapse the "; Use X instead." / ". Use X instead." replacement clause to "→ X".
+	$message = preg_replace( '/[;.]?\s*Use (.+?)( instead)?\.?$/', ' → $1', $message );
+	return rtrim( $message, '.;' );
+}
+
+/**
+ * Determine the process exit code from the tally and --fail-on.
+ *
+ * --fail-on=fatal  → non-zero only when the upgrade would truly break (a removed
+ *                    PHP symbol). Behavioural "risky" findings do not trip it.
+ * --fail-on=risky  → non-zero on fatals or risky behavioural changes.
+ * --fail-on=deprecated (alias any/warning) → non-zero on any finding.
+ *
+ * @param array $tally Severity tally.
+ * @param array $opts  Parsed options.
+ * @return int
+ */
+function exit_code( array $tally, array $opts ): int {
+	$fail_on = $opts['fail-on'] ?? '';
+	if ( '' === $fail_on ) {
+		return 0;
+	}
+	if ( 'fatal' === $fail_on && $tally['fatal'] > 0 ) {
+		return 1;
+	}
+	if ( 'risky' === $fail_on && ( $tally['fatal'] + $tally['risky'] ) > 0 ) {
+		return 1;
+	}
+	if ( in_array( $fail_on, array( 'deprecated', 'any', 'warning' ), true ) && $tally['total'] > 0 ) {
+		return 1;
+	}
+	return 0;
+}
+
+/**
+ * Locate the PHP_CodeSniffer binary, whether this package is run standalone
+ * (its own vendor/) or installed as a dependency (the consumer's vendor/bin).
+ *
+ * @return string|null Absolute path to phpcs, or null if not found.
+ */
+function find_phpcs(): ?string {
+	$candidates = array(
+		dirname( __DIR__ ) . '/vendor/bin/phpcs', // Standalone: package is the project root.
+		dirname( __DIR__, 3 ) . '/bin/phpcs',     // Installed: vendor/itzmekhokan/pressready/bin → vendor/bin.
+	);
+	foreach ( $candidates as $path ) {
+		if ( is_file( $path ) ) {
+			return $path;
+		}
+	}
+	return null;
+}
+
+/**
+ * Parse `--key=value` and bare `--flag` options.
+ *
+ * @param string[] $argv CLI arguments.
+ * @return array<string,string>
+ */
+function parse_opts( array $argv ): array {
+	$opts = array();
+	foreach ( array_slice( $argv, 1 ) as $arg ) {
+		if ( preg_match( '/^--([a-z0-9_-]+)=(.*)$/i', $arg, $m ) ) {
+			$opts[ $m[1] ] = $m[2];
+		} elseif ( preg_match( '/^--([a-z0-9_-]+)$/i', $arg, $m ) ) {
+			$opts[ $m[1] ] = '1';
+		}
+	}
+	return $opts;
+}

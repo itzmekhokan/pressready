@@ -1,0 +1,26 @@
+{
+    "name": "itzmekhokan/pressready",
+    "description": "Pressready — scan a WordPress site's whole stack for what breaks on a target PHP/WP version, before you upgrade.",
+    "type": "phpcodesniffer-standard",
+    "keywords": ["wordpress", "phpcs", "phpcompatibility", "static-analysis", "upgrade", "compatibility", "deprecations"],
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "php": ">=7.4",
+        "phpcompatibility/phpcompatibility-wp": "3.0.0-alpha2",
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0"
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "bin": ["bin/pressready"],
+    "autoload": {
+        "psr-4": {
+            "Pressready\\": "Pressready/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "phpcsstandards/phpcsutils": true
+        }
+    }
+}
