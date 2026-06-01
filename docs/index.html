@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pressready — WordPress upgrade readiness scanner</title>
+<meta name="description" content="Scan a WordPress site's whole installed stack — every plugin and theme — and find out exactly what breaks on a target PHP or WordPress version, before you upgrade.">
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+
+<meta property="og:title" content="Pressready — WordPress upgrade readiness scanner">
+<meta property="og:description" content="Scan the whole stack. Know exactly what breaks before you upgrade PHP or WordPress.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://itzmekhokan.github.io/pressready/">
+<meta name="twitter:card" content="summary_large_image">
+
+<style>
+  :root{
+    --blue1:#4F6BFF; --blue2:#2847D9; --ink:#0f1530; --muted:#5b6486;
+    --card:#ffffff; --bg:#f5f7ff; --line:#e6e9f5; --amber:#FFB100; --code:#1a2240;
+    --fatal:#f7e8e8; --fatal-text:#b91c1c;
+    --risky:#fff8e8; --risky-text:#92400e;
+    --php:#eef8ff; --php-text:#0369a1;
+    --wp:#f0fdf4; --wp-text:#166534;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  a{color:var(--blue2);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:960px;margin:0 auto;padding:0 24px}
+  code,pre{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+  code{background:#eef1ff;padding:1px 5px;border-radius:4px;font-size:.9em}
+
+  /* Hero */
+  header.hero{background:linear-gradient(135deg,var(--blue1),var(--blue2));color:#fff;padding:72px 0 64px;text-align:center}
+  .hero img.mark{width:104px;height:104px;filter:drop-shadow(0 8px 20px rgba(0,0,0,.25))}
+  .hero h1{font-size:64px;font-weight:800;letter-spacing:-2px;margin:18px 0 6px}
+  .hero .tag{font-size:21px;color:#dde3ff;margin:0 auto 8px;max-width:640px}
+  .hero .sub{font-size:15px;color:#aab6f5;margin:0 0 28px}
+  .badges{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:28px}
+  .badges img{height:22px}
+  .cta{display:inline-flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .btn{display:inline-block;padding:12px 22px;border-radius:10px;font-weight:600;font-size:15px;transition:transform .12s}
+  .btn.primary{background:#fff;color:var(--blue2)}
+  .btn.ghost{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.35)}
+  .btn:hover{text-decoration:none;transform:translateY(-1px)}
+
+  /* Nav */
+  nav.sticky{position:sticky;top:0;z-index:99;background:#fff;border-bottom:1px solid var(--line);padding:0}
+  nav.sticky .wrap{display:flex;gap:24px;align-items:center;height:48px;overflow-x:auto}
+  nav.sticky a{font-size:14px;font-weight:500;color:var(--muted);white-space:nowrap}
+  nav.sticky a:hover{color:var(--blue2);text-decoration:none}
+
+  /* Sections */
+  section{padding:56px 0}
+  section h2{font-size:30px;margin:0 0 8px;letter-spacing:-.5px}
+  section .lede{color:var(--muted);margin:0 0 28px;font-size:17px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}
+  .feat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px}
+  .feat h3{margin:0 0 6px;font-size:17px}
+  .feat p{margin:0;color:var(--muted);font-size:14.5px}
+  .feat .dot{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--blue1),var(--blue2));display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-weight:700;margin-bottom:12px}
+
+  pre{background:var(--code);color:#e7ecff;padding:18px 20px;border-radius:12px;overflow:auto;font-size:14px;line-height:1.7;margin:0}
+  pre .c{color:#8a96c9}
+  pre .k{color:var(--amber)}
+  pre + pre{margin-top:12px}
+
+  .sev-table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .sev-table th,.sev-table td{text-align:left;padding:12px 16px;border-bottom:1px solid var(--line);font-size:14.5px}
+  .sev-table th{background:#eef1ff;font-weight:700}
+  .sev-table tr:last-child td{border-bottom:0}
+  .sev{display:inline-block;font-size:12px;font-weight:700;padding:2px 9px;border-radius:20px;font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+  .sev.fatal{background:var(--fatal);color:var(--fatal-text)}
+  .sev.risky{background:var(--risky);color:var(--risky-text)}
+  .sev.php{background:var(--php);color:var(--php-text)}
+  .sev.wp{background:var(--wp);color:var(--wp-text)}
+
+  table.road{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  table.road th,table.road td{text-align:left;padding:12px 16px;border-bottom:1px solid var(--line);font-size:14.5px}
+  table.road th{background:#eef1ff;font-weight:700}
+  table.road tr:last-child td{border-bottom:0}
+  .pill{font-size:12px;font-weight:700;padding:2px 9px;border-radius:20px}
+  .pill.done{background:#e3f7ea;color:#137a3c}
+  .pill.plan{background:#eef1ff;color:var(--blue2)}
+
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:640px){.two-col{grid-template-columns:1fr}.hero h1{font-size:46px}.hero .tag{font-size:18px}}
+
+  footer{padding:40px 0 60px;text-align:center;color:var(--muted);font-size:14px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <img class="mark" src="assets/icon.svg" alt="Pressready logo">
+    <h1>Pressready</h1>
+    <p class="tag">Is your WordPress site ready for the next PHP or WordPress version? Scan the whole installed stack and find out <em>before</em> you upgrade.</p>
+    <p class="sub">Every plugin · every theme · every mu-plugin — not just your own code</p>
+    <div class="badges">
+      <a href="https://github.com/itzmekhokan/pressready/actions/workflows/ci.yml"><img src="https://github.com/itzmekhokan/pressready/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+      <img src="https://img.shields.io/badge/php-%3E%3D7.4-8892BF?logo=php&logoColor=white" alt="PHP >= 7.4">
+      <img src="https://img.shields.io/badge/WordPress-compatible-21759B?logo=wordpress&logoColor=white" alt="WordPress compatible">
+      <img src="https://img.shields.io/badge/license-GPL--2.0--or--later-blue" alt="License GPL-2.0-or-later">
+    </div>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/itzmekhokan/pressready">View on GitHub</a>
+      <a class="btn ghost" href="#install">Install</a>
+      <a class="btn ghost" href="#wpcli">WP-CLI</a>
+      <a class="btn ghost" href="#roadmap">Roadmap</a>
+    </div>
+  </div>
+</header>
+
+<nav class="sticky">
+  <div class="wrap">
+    <a href="#why">Why</a>
+    <a href="#how">How it works</a>
+    <a href="#severity">Severity</a>
+    <a href="#install">Install</a>
+    <a href="#quickstart">Quick start</a>
+    <a href="#wpcli">WP-CLI</a>
+    <a href="#baseline">Baseline &amp; CI</a>
+    <a href="#roadmap">Roadmap</a>
+  </div>
+</nav>
+
+<section id="why">
+  <div class="wrap">
+    <h2>The problem</h2>
+    <p class="lede">Upgrading PHP or WordPress on a site with dozens of third-party plugins is a gamble. There is no way to know what breaks until it breaks — in production. Pressready changes that.</p>
+    <div class="grid">
+      <div class="feat"><div class="dot">⬡</div><h3>Whole-stack scan</h3><p>Scans every plugin, theme, and mu-plugin in <code>wp-content</code> — not just your own code. Third-party code breaks too.</p></div>
+      <div class="feat"><div class="dot">⊕</div><h3>PHP + WordPress in one pass</h3><p>Two engines, one command. PHPCompatibility handles the PHP axis; a custom sniff handles the WordPress deprecation axis.</p></div>
+      <div class="feat"><div class="dot">◎</div><h3>Honest severity model</h3><p>Fatals (white screen) are separated from risky behaviour changes and mere deprecations — no false alarms, no hiding real problems.</p></div>
+      <div class="feat"><div class="dot">⊞</div><h3>Per-component attribution</h3><p>Findings group by the plugin or theme that owns them, sorted fatals-first, so you know exactly which package to fix or replace.</p></div>
+      <div class="feat"><div class="dot">◉</div><h3>Baseline for legacy sites</h3><p>Snapshot today's known issues and fail CI only on new findings — adopt on a site with pre-existing tech debt without drowning in noise.</p></div>
+      <div class="feat"><div class="dot">⌘</div><h3>WP-CLI native</h3><p>Run <code>wp pressready scan</code> from the WordPress root on a live site. No database needed — readiness scanning is entirely static.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="how" style="background:#fff;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="lede">One scan, two engines. Pressready runs PHPCompatibility and its own WordPress sniff in a single PHP_CodeSniffer pass.</p>
+    <div class="grid">
+      <div class="feat">
+        <div class="dot">⬡</div>
+        <h3>PHP axis — PHPCompatibility</h3>
+        <p>The battle-tested community standard. Catches removed functions, deprecated language features, and behavioural changes for any PHP version from 5.3 to 8.4. Runs via the <code>phpcompatibility/phpcompatibility-wp</code> wrapper that skips functions WordPress itself polyfills — no false positives.</p>
+      </div>
+      <div class="feat">
+        <div class="dot">⊕</div>
+        <h3>WP axis — custom sniff + dataset</h3>
+        <p>A custom PHPCS sniff driven by an authoritative, regenerable JSON dataset of <em>every</em> WordPress core deprecation — extracted straight from core's own <code>_deprecated_*</code> annotations. 641 calls → 602 unique entries covering functions, methods, classes, hooks, files, and arguments back to WordPress 1.5.</p>
+      </div>
+    </div>
+    <p style="margin-top:20px;color:var(--muted);font-size:14.5px">The dataset is regenerable against any <code>wordpress-develop</code> checkout: <code>php bin/gen-wp-deprecations.php --src=/path/to/wordpress-develop/src --out=data/wp-deprecations.json</code>. Re-run each WordPress release to refresh for free.</p>
+  </div>
+</section>
+
+<section id="severity">
+  <div class="wrap">
+    <h2>Severity model</h2>
+    <p class="lede">Every finding is classified into one tier. The verdict and <code>--fail-on</code> key on true fatals only, so the report never cries wolf.</p>
+    <table class="sev-table">
+      <tr><th>Level</th><th>Meaning</th><th>Source</th></tr>
+      <tr><td><span class="sev fatal">fatal</span></td><td>PHP symbol <strong>removed</strong> by the target version → call to undefined → white screen</td><td>PHPCompatibility (message says "removed since PHP")</td></tr>
+      <tr><td><span class="sev risky">risky</span></td><td>Behavioural / correctness change that still runs but may produce wrong results</td><td>Other PHPCompatibility errors</td></tr>
+      <tr><td><span class="sev php">php</span></td><td>PHP feature <strong>deprecated</strong> (not yet removed) by the target version</td><td>PHPCompatibility warnings</td></tr>
+      <tr><td><span class="sev wp">wp</span></td><td>WordPress core API deprecated by the target WP version</td><td>Pressready sniff</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="install" style="background:#fff;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <div class="wrap">
+    <h2>Install</h2>
+    <p class="lede">Pressready is a Composer dev tool. It registers the <code>Pressready</code> PHPCS standard automatically via <code>dealerdirect/phpcodesniffer-composer-installer</code>.</p>
+    <pre><span class="c"># Add to your project as a dev dependency</span>
+composer require --dev itzmekhokan/pressready</pre>
+    <p style="margin-top:16px;color:var(--muted);font-size:14.5px">Requires PHP 7.4+. Uses PHPCompatibility 10.x (pre-release, pinned) for PHP 8.x removal data — will be unpinned when it ships stable.</p>
+  </div>
+</section>
+
+<section id="quickstart">
+  <div class="wrap">
+    <h2>Quick start</h2>
+    <p class="lede">Run the standalone CLI directly after <code>composer install</code>.</p>
+    <pre><span class="c"># Both axes — the headline question.</span>
+vendor/bin/pressready <span class="k">--php=8.4 --wp=6.9</span> --path=wp-content
+
+<span class="c"># One axis at a time.</span>
+vendor/bin/pressready <span class="k">--php=8.4</span> --path=.
+vendor/bin/pressready <span class="k">--wp=6.9</span>  --path=.
+
+<span class="c"># Delta: only what newly breaks upgrading FROM 6.4 TO 6.9.</span>
+vendor/bin/pressready --wp=6.9 <span class="k">--since=6.4</span> --path=.
+
+<span class="c"># CI gate: fail the build only on real fatals.</span>
+vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--fail-on=fatal</span> --path=.
+
+<span class="c"># Machine-readable output.</span>
+vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--format=json</span> --path=.
+
+<span class="c"># GitHub PR inline annotations.</span>
+vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--format=github</span> --path=.</pre>
+    <p style="margin-top:16px;color:var(--muted);font-size:14.5px">
+      <code>--format</code>: <code>grouped</code> (default) · <code>summary</code> · <code>json</code> · <code>github</code><br>
+      <code>--fail-on</code>: <code>fatal</code> · <code>risky</code> · <code>deprecated</code>
+    </p>
+  </div>
+</section>
+
+<section id="wpcli" style="background:#fff;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <div class="wrap">
+    <h2>WP-CLI — <code>wp pressready scan</code></h2>
+    <p class="lede">Same engine, run from the WordPress root. Defaults to the site's <code>wp-content</code>. Runs <em>before</em> WordPress boots — no database required.</p>
+
+    <h3 style="font-size:18px;margin:0 0 10px">Register the command</h3>
+    <p style="color:var(--muted);font-size:14.5px;margin:0 0 10px">Add to your project's <code>wp-cli.yml</code>:</p>
+    <pre>require:
+  - vendor/itzmekhokan/pressready/wp-cli.php</pre>
+    <p style="color:var(--muted);font-size:14.5px;margin:12px 0 10px">Or pass <code>--require</code> inline:</p>
+    <pre>wp <span class="k">--require=vendor/itzmekhokan/pressready/wp-cli.php</span> pressready scan --php=8.4 --wp=6.9</pre>
+
+    <h3 style="font-size:18px;margin:24px 0 10px">Usage</h3>
+    <pre><span class="c"># Scan with both axes — the main question.</span>
+wp pressready scan <span class="k">--php=8.4 --wp=6.9</span>
+
+<span class="c"># Scan a specific directory instead of the default wp-content.</span>
+wp pressready scan wp-content/plugins <span class="k">--php=8.4</span>
+
+<span class="c"># WordPress axis only, JSON output.</span>
+wp pressready scan <span class="k">--wp=6.9 --format=json</span>
+
+<span class="c"># CI gate: exit non-zero when fatals are present.</span>
+wp pressready scan --php=8.4 --wp=6.9 <span class="k">--fail-on=fatal</span>
+
+<span class="c"># Delta: only what newly deprecates upgrading from 6.4.</span>
+wp pressready scan --wp=6.9 <span class="k">--since=6.4</span>
+
+<span class="c"># Table format (default), summary, CSV, or count.</span>
+wp pressready scan --php=8.4 <span class="k">--format=table</span>
+wp pressready scan --php=8.4 <span class="k">--format=summary</span>
+wp pressready scan --php=8.4 <span class="k">--format=csv</span></pre>
+
+    <div style="margin-top:20px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:18px 20px">
+      <p style="margin:0 0 8px;font-weight:600;font-size:14.5px">Options</p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>scan [&lt;path&gt;]</code></td><td style="color:var(--muted)">Directory to scan. Default: this site's <code>wp-content</code>. Positional — WP-CLI reserves <code>--path</code> for the install dir.</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--php=&lt;ver&gt;</code></td><td style="color:var(--muted)">Target PHP version (e.g. <code>8.4</code>). Reports removed/deprecated PHP features.</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--wp=&lt;ver&gt;</code></td><td style="color:var(--muted)">Target WordPress version (e.g. <code>6.9</code>). Reports deprecated core APIs.</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--since=&lt;ver&gt;</code></td><td style="color:var(--muted)">With <code>--wp</code>, only what newly deprecates upgrading from this version.</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--format=&lt;fmt&gt;</code></td><td style="color:var(--muted)"><code>table</code> (default) · <code>summary</code> · <code>json</code> · <code>csv</code> · <code>yaml</code> · <code>count</code></td></tr>
+        <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--fail-on=&lt;lvl&gt;</code></td><td style="color:var(--muted)">Exit non-zero when findings at/above this level exist: <code>fatal</code> · <code>risky</code> · <code>deprecated</code></td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="baseline">
+  <div class="wrap">
+    <h2>Baseline &amp; CI</h2>
+    <p class="lede">Adopt Pressready on a legacy site without drowning in pre-existing findings — snapshot today's known issues, then fail CI only on new ones.</p>
+    <div class="two-col">
+      <div>
+        <p style="font-weight:600;margin:0 0 8px;font-size:15px">Standalone CLI</p>
+        <pre><span class="c"># Snapshot existing findings.</span>
+vendor/bin/pressready \
+  --php=8.4 --wp=6.9 \
+  <span class="k">--generate-baseline</span>
+
+<span class="c"># From now on, fail only on NEW findings.</span>
+vendor/bin/pressready \
+  --php=8.4 --wp=6.9 \
+  <span class="k">--baseline --fail-on=fatal</span></pre>
+      </div>
+      <div>
+        <p style="font-weight:600;margin:0 0 8px;font-size:15px">GitHub Actions</p>
+        <pre><span class="k">- name:</span> Pressready scan
+  <span class="k">run:</span> |
+    php bin/pressready \
+      --php=8.4 --wp=6.9 \
+      --baseline \
+      --fail-on=fatal \
+      <span class="k">--format=github</span> \
+      --path=wp-content</pre>
+      </div>
+    </div>
+    <p style="margin-top:16px;color:var(--muted);font-size:14.5px">Findings are keyed by <code>path → signature</code> (sniff code + message with line numbers neutralised), so the baseline survives line shifts and reordering. <code>--baseline=&lt;file&gt;</code> / <code>--generate-baseline=&lt;file&gt;</code> accept a custom path.</p>
+
+    <h3 style="font-size:18px;margin:28px 0 8px">Per-finding suppression</h3>
+    <p style="color:var(--muted);font-size:14.5px;margin:0 0 10px">Uses native PHPCS inline comments — no custom syntax to learn.</p>
+    <pre><span class="c">// Suppress everything on this line.</span>
+create_function( '$x', 'return $x;' ); <span class="k">// phpcs:ignore</span>
+
+<span class="c">// Suppress a specific sniff.</span>
+get_postdata( 1 ); <span class="k">// phpcs:ignore Pressready.WordPress.Deprecated.DeprecatedFunction</span></pre>
+  </div>
+</section>
+
+<section id="roadmap" style="background:#fff;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <div class="wrap">
+    <h2>Roadmap</h2>
+    <p class="lede">The core scanning engine and WP-CLI integration are complete and production-ready.</p>
+    <table class="road">
+      <tr><th>Phase</th><th>Scope</th><th>Status</th></tr>
+      <tr><td>1</td><td>WP-deprecations dataset generator + authoritative JSON dataset</td><td><span class="pill done">done</span></td></tr>
+      <tr><td>2</td><td>Custom PHPCS sniff + reporter (grouped / summary / json), version gate, exit codes</td><td><span class="pill done">done</span></td></tr>
+      <tr><td>3</td><td><code>--php=</code> via bundled PHPCompatibility; unified severity model (fatal / risky / php / wp)</td><td><span class="pill done">done</span></td></tr>
+      <tr><td>4</td><td>Per-component attribution, baseline, <code>--format=github</code>, inline suppression</td><td><span class="pill done">done</span></td></tr>
+      <tr><td>5</td><td><code>wp pressready scan</code> WP-CLI command (before_wp_load, all formats, <code>--fail-on</code>)</td><td><span class="pill done">done</span></td></tr>
+      <tr><td>6+</td><td>DataViews admin report; fix-hint links; Update Safety Net (sequel); WP.org distribution</td><td><span class="pill plan">planned</span></td></tr>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p><strong>Pressready</strong> · GPL-2.0-or-later · built by <a href="https://github.com/itzmekhokan">Khokan Sardar</a></p>
+    <p>Sibling to <a href="https://itzmekhokan.github.io/crate/">Crate</a> in a "safe change" family — Crate ships content between environments; Pressready tells you it's safe to change the environment itself.</p>
+    <p><a href="https://github.com/itzmekhokan/pressready">GitHub</a> · <a href="https://github.com/itzmekhokan/pressready/issues">Issues</a> · <a href="https://packagist.org/packages/itzmekhokan/pressready">Packagist</a></p>
+  </div>
+</footer>
+
+</body>
+</html>
