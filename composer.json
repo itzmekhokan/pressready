@@ -6,10 +6,10 @@
     "license": "GPL-2.0-or-later",
     "require": {
         "php": ">=7.4",
-        "phpcompatibility/phpcompatibility-wp": "3.0.0-alpha2",
+        "phpcompatibility/phpcompatibility-wp": "^2.1",
         "dealerdirect/phpcodesniffer-composer-installer": "^1.0"
     },
-    "minimum-stability": "dev",
+    "minimum-stability": "stable",
     "prefer-stable": true,
     "bin": ["bin/pressready"],
     "autoload": {
