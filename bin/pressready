@@ -77,22 +77,23 @@ function main( array $argv ): void {
 	// report to a temp file (clean JSON) and read it back.
 	$report = tempnam( sys_get_temp_dir(), 'pressready-' );
 
-	// Live progress: a large wp-content scan can take a while, so stream phpcs's
-	// own -p progress meter to the terminal. Only for human output (never JSON/
-	// github), and only when attached to a TTY (so pipes/CI logs stay clean).
-	$human    = ( 'json' !== $format && 'github' !== $format );
-	$progress = $human
-		&& function_exists( 'proc_open' )
-		&& function_exists( 'posix_isatty' ) && @posix_isatty( STDERR );
+	// Live progress: a large wp-content scan can take a while. phpcs's own -p
+	// meter is unreliable (it only prints to a real TTY and stays silent through
+	// any pipe/redirect), so pressready renders its own spinner instead while
+	// phpcs runs in the background. Human output only (never JSON/github); auto
+	// on a TTY, and overridable with PRESSREADY_PROGRESS=1|0 for pipes/tests.
+	$human        = ( 'json' !== $format && 'github' !== $format );
+	$progress_env = getenv( 'PRESSREADY_PROGRESS' );
+	$progress     = $human && function_exists( 'proc_open' ) && (
+		'1' === $progress_env
+		|| ( '0' !== $progress_env && function_exists( 'posix_isatty' ) && @posix_isatty( STDERR ) )
+	);
 
 	$args = array(
 		'--standard=' . implode( ',', $standards ),
 		'--report-json=' . $report,
 		'--extensions=php',
 	);
-	if ( $progress ) {
-		$args[] = '-p'; // phpcs prints "X / Y (Z%)" progress to stdout.
-	}
 	if ( '' !== $php ) {
 		// testVersion is the PHP version the site will run on; PHPCompatibility
 		// reports everything removed/deprecated by then.
@@ -114,27 +115,11 @@ function main( array $argv ): void {
 		implode( ' ', array_map( 'escapeshellarg', $args ) )
 	);
 
-	// Capture phpcs stderr (instead of discarding it) so a crash is reportable.
-	// The report itself goes to --report-json, so phpcs stdout carries only the
-	// -p progress meter: with progress on, stream it live (passthru); otherwise
-	// discard stdout. stderr is always captured to a file for error reporting.
+	// The report goes to --report-json and phpcs stdout is discarded; stderr is
+	// always captured to a file so a crash (e.g. out of memory) is reportable.
 	$errfile = tempnam( sys_get_temp_dir(), 'pressready-err-' );
 	if ( $progress ) {
-		// phpcs only prints its -p meter when stdout is a real TTY (it stays
-		// silent on a pipe). So wire phpcs's stdout straight to our terminal
-		// (stderr) via proc_open — live, unbuffered — and capture its stderr to
-		// the error file. The JSON report still lands in --report-json.
-		$descriptors = array(
-			0 => STDIN,
-			1 => STDERR, // progress meter → terminal
-			2 => array( 'file', $errfile, 'w' ), // phpcs errors → capture file
-		);
-		$pipes = array();
-		$proc  = proc_open( $cmd, $descriptors, $pipes );
-		if ( is_resource( $proc ) ) {
-			proc_close( $proc );
-		}
-		fwrite( STDERR, "\n" ); // Close off the progress line before the report.
+		run_with_spinner( $cmd, $errfile );
 	} else {
 		shell_exec( $cmd . ' 1>/dev/null 2>' . escapeshellarg( $errfile ) );
 	}
@@ -642,6 +627,43 @@ function exit_code( array $tally, array $opts ): int {
 		return 1;
 	}
 	return 0;
+}
+
+/**
+ * Run phpcs in the background and animate a spinner on stderr until it finishes.
+ *
+ * phpcs's own -p meter only shows on a real TTY and is swallowed by any pipe, so
+ * pressready drives its own indicator instead: it spawns phpcs via proc_open
+ * (stdout discarded — the report goes to --report-json; stderr captured to
+ * $errfile so a crash is still reportable) and ticks a braille spinner with
+ * elapsed seconds while polling proc_get_status().
+ *
+ * @param string $cmd     Full phpcs shell command.
+ * @param string $errfile Path to capture phpcs stderr into.
+ */
+function run_with_spinner( string $cmd, string $errfile ): void {
+	$descriptors = array(
+		0 => STDIN,
+		1 => array( 'file', '/dev/null', 'w' ),
+		2 => array( 'file', $errfile, 'w' ),
+	);
+	$pipes = array();
+	$proc  = proc_open( $cmd, $descriptors, $pipes );
+	if ( ! is_resource( $proc ) ) {
+		return;
+	}
+
+	$frames = array( '⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏' );
+	$start  = microtime( true );
+	$i      = 0;
+	while ( proc_get_status( $proc )['running'] ) {
+		$elapsed = (int) ( microtime( true ) - $start );
+		fprintf( STDERR, "\r  %s  scanning… %ds ", $frames[ $i % count( $frames ) ], $elapsed );
+		++$i;
+		usleep( 100000 ); // 100ms tick.
+	}
+	proc_close( $proc );
+	fwrite( STDERR, "\r\033[K" ); // Wipe the spinner line before the report prints.
 }
 
 /**
