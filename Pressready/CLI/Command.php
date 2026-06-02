@@ -81,7 +81,10 @@ class Command {
 		$result = $this->run_engine( $php, $wp, $since, $path, $failon );
 		$data   = json_decode( $result['json'], true );
 		if ( ! is_array( $data ) || ! isset( $data['tally'] ) ) {
-			WP_CLI::error( 'Scan produced no parseable output. Is the package installed (composer install)?' );
+			$detail = ( '' !== ( $result['stderr'] ?? '' ) )
+				? "\n" . $result['stderr']
+				: ' Is the package installed (composer install)?';
+			WP_CLI::error( 'Scan produced no parseable output.' . $detail );
 		}
 
 		$tally = $data['tally'];
@@ -140,10 +143,14 @@ class Command {
 			$cmd .= ' ' . escapeshellarg( $a );
 		}
 
-		$out  = array();
-		$code = 0;
-		exec( $cmd . ' 2>/dev/null', $out, $code );
-		return array( 'json' => implode( "\n", $out ), 'code' => (int) $code );
+		// Capture stderr so an engine/phpcs crash is reportable, not swallowed.
+		$out     = array();
+		$code    = 0;
+		$errfile = tempnam( sys_get_temp_dir(), 'pressready-cli-' );
+		exec( $cmd . ' 2>' . escapeshellarg( $errfile ), $out, $code );
+		$stderr  = is_file( $errfile ) ? trim( (string) file_get_contents( $errfile ) ) : '';
+		@unlink( $errfile );
+		return array( 'json' => implode( "\n", $out ), 'code' => (int) $code, 'stderr' => $stderr );
 	}
 
 	/**

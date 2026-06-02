@@ -91,20 +91,31 @@ function main( array $argv ): void {
 	}
 	$args[] = $root;
 
+	// Run phpcs with an unlimited memory limit: tokenizing a large stack (or a
+	// single big file) easily blows past PHP's default 128M, and phpcs then dies
+	// mid-run *before* writing the JSON report — which used to surface only as an
+	// opaque "no parseable output". The -d flag applies to the phpcs subprocess.
 	$cmd = sprintf(
 		'PRESSREADY_WP=%s PRESSREADY_WP_SINCE=%s %s %s',
 		escapeshellarg( $wp ),
 		escapeshellarg( $since ),
-		escapeshellarg( PHP_BINARY ) . ' ' . escapeshellarg( $phpcs ),
+		escapeshellarg( PHP_BINARY ) . ' -d memory_limit=-1 ' . escapeshellarg( $phpcs ),
 		implode( ' ', array_map( 'escapeshellarg', $args ) )
 	);
 
-	shell_exec( $cmd . ' 2>/dev/null' );
-	$json = is_file( $report ) ? file_get_contents( $report ) : '';
+	// Capture phpcs stderr (instead of discarding it) so a crash is reportable.
+	$errfile = tempnam( sys_get_temp_dir(), 'pressready-err-' );
+	shell_exec( $cmd . ' 2>' . escapeshellarg( $errfile ) );
+	$json   = is_file( $report ) ? file_get_contents( $report ) : '';
+	$stderr = is_file( $errfile ) ? trim( (string) file_get_contents( $errfile ) ) : '';
 	@unlink( $report );
+	@unlink( $errfile );
 	$data = json_decode( (string) $json, true );
 	if ( ! is_array( $data ) || ! isset( $data['files'] ) ) {
 		fwrite( STDERR, "error: scan produced no parseable output\n" );
+		if ( '' !== $stderr ) {
+			fwrite( STDERR, "phpcs reported:\n" . $stderr . "\n" );
+		}
 		exit( 2 );
 	}
 
