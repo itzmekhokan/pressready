@@ -28,8 +28,43 @@ Under the hood it runs two engines in one PHPCS pass: [PHPCompatibility](https:/
 
 ## Install
 
+Detecting breakages on **PHP 8.2–8.4** requires the `PHPCompatibility 10` engine, which the upstream project only ships as a dev release. So your project needs to allow dev stability (it still prefers stable for everything else) and allow the PHPCS installer plugin to register the standards.
+
+Add this to your project's `composer.json`:
+
+```jsonc
+{
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "phpcsstandards/phpcsutils": true
+        }
+    }
+}
+```
+
+Then:
+
 ```bash
 composer require --dev itzmekhokan/pressready
+```
+
+Or set the same config from the command line, without editing the file by hand:
+
+```bash
+composer config minimum-stability dev
+composer config prefer-stable true
+composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+composer config --no-plugins allow-plugins.phpcsstandards/phpcsutils true
+composer require --dev itzmekhokan/pressready
+```
+
+Verify the standards registered:
+
+```bash
+vendor/bin/phpcs -i   # should list "Pressready" and "PHPCompatibilityWP"
 ```
 
 Requires PHP 7.4+.

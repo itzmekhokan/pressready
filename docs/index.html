@@ -180,8 +180,18 @@
   <div class="wrap">
     <h2>Install</h2>
     <p class="lede">Pressready is a Composer dev tool. It registers the <code>Pressready</code> PHPCS standard automatically via <code>dealerdirect/phpcodesniffer-composer-installer</code>.</p>
-    <pre><span class="c"># Add to your project as a dev dependency</span>
-composer require --dev itzmekhokan/pressready</pre>
+    <p style="color:var(--muted);font-size:14.5px">PHP 8.2–8.4 detection needs the pre-release <code>PHPCompatibility 10</code> engine, so your project must allow dev stability (it still prefers stable everywhere else) and allow the PHPCS installer plugins.</p>
+    <pre><span class="c"># Configure your project once</span>
+composer config minimum-stability dev
+composer config prefer-stable true
+composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+composer config --no-plugins allow-plugins.phpcsstandards/phpcsutils true
+
+<span class="c"># Add to your project as a dev dependency</span>
+composer require --dev itzmekhokan/pressready
+
+<span class="c"># Verify the standards registered</span>
+vendor/bin/phpcs -i   <span class="c"># lists "Pressready" and "PHPCompatibilityWP"</span></pre>
     <p style="margin-top:16px;color:var(--muted);font-size:14.5px">Requires PHP 7.4+. Uses PHPCompatibility 10.x (pre-release, pinned) for PHP 8.x removal data — will be unpinned when it ships stable.</p>
   </div>
 </section>
