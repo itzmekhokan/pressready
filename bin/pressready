@@ -77,11 +77,22 @@ function main( array $argv ): void {
 	// report to a temp file (clean JSON) and read it back.
 	$report = tempnam( sys_get_temp_dir(), 'pressready-' );
 
+	// Live progress: a large wp-content scan can take a while, so stream phpcs's
+	// own -p progress meter to the terminal. Only for human output (never JSON/
+	// github), and only when attached to a TTY (so pipes/CI logs stay clean).
+	$human    = ( 'json' !== $format && 'github' !== $format );
+	$progress = $human
+		&& function_exists( 'proc_open' )
+		&& function_exists( 'posix_isatty' ) && @posix_isatty( STDERR );
+
 	$args = array(
 		'--standard=' . implode( ',', $standards ),
 		'--report-json=' . $report,
 		'--extensions=php',
 	);
+	if ( $progress ) {
+		$args[] = '-p'; // phpcs prints "X / Y (Z%)" progress to stdout.
+	}
 	if ( '' !== $php ) {
 		// testVersion is the PHP version the site will run on; PHPCompatibility
 		// reports everything removed/deprecated by then.
@@ -104,8 +115,29 @@ function main( array $argv ): void {
 	);
 
 	// Capture phpcs stderr (instead of discarding it) so a crash is reportable.
+	// The report itself goes to --report-json, so phpcs stdout carries only the
+	// -p progress meter: with progress on, stream it live (passthru); otherwise
+	// discard stdout. stderr is always captured to a file for error reporting.
 	$errfile = tempnam( sys_get_temp_dir(), 'pressready-err-' );
-	shell_exec( $cmd . ' 2>' . escapeshellarg( $errfile ) );
+	if ( $progress ) {
+		// phpcs only prints its -p meter when stdout is a real TTY (it stays
+		// silent on a pipe). So wire phpcs's stdout straight to our terminal
+		// (stderr) via proc_open — live, unbuffered — and capture its stderr to
+		// the error file. The JSON report still lands in --report-json.
+		$descriptors = array(
+			0 => STDIN,
+			1 => STDERR, // progress meter → terminal
+			2 => array( 'file', $errfile, 'w' ), // phpcs errors → capture file
+		);
+		$pipes = array();
+		$proc  = proc_open( $cmd, $descriptors, $pipes );
+		if ( is_resource( $proc ) ) {
+			proc_close( $proc );
+		}
+		fwrite( STDERR, "\n" ); // Close off the progress line before the report.
+	} else {
+		shell_exec( $cmd . ' 1>/dev/null 2>' . escapeshellarg( $errfile ) );
+	}
 	$json   = is_file( $report ) ? file_get_contents( $report ) : '';
 	$stderr = is_file( $errfile ) ? trim( (string) file_get_contents( $errfile ) ) : '';
 	@unlink( $report );
@@ -441,7 +473,50 @@ function header_label( string $path ): ?string {
 }
 
 /**
- * Render the grouped report.
+ * "Fix-first" block: list every fatal, then every risky finding with a
+ * clickable path:line, so the actionable issues aren't buried under a long tail
+ * of deprecations on a big scan. The full per-component breakdown still follows.
+ *
+ * @param array  $components Grouped findings (each has 'dir' + 'files').
+ * @param string $root       Scan root; locations are shown relative to it.
+ */
+function render_fix_first( array $components, string $root ): void {
+	$buckets = array( 'fatal' => array(), 'risky' => array() );
+	foreach ( $components as $c ) {
+		foreach ( $c['files'] as $rel => $findings ) {
+			$full = rtrim( $c['dir'], '/' ) . '/' . $rel;
+			$path = ltrim( str_replace( $root, '', $full ), '/' );
+			if ( '' === $path ) {
+				$path = $rel;
+			}
+			foreach ( $findings as $f ) {
+				if ( isset( $buckets[ $f['severity'] ] ) ) {
+					$buckets[ $f['severity'] ][] = array(
+						'loc' => $path . ':' . $f['line'],
+						'msg' => compact_message( $f['message'] ),
+					);
+				}
+			}
+		}
+	}
+
+	$sections = array(
+		'fatal' => '  ✗ FATAL (%d) — these break on upgrade; fix first:',
+		'risky' => '  ⚠ RISKY (%d) — review the behaviour changes before upgrading:',
+	);
+	foreach ( $sections as $sev => $heading ) {
+		if ( empty( $buckets[ $sev ] ) ) {
+			continue;
+		}
+		printf( "\n" . $heading . "\n", count( $buckets[ $sev ] ) );
+		foreach ( $buckets[ $sev ] as $row ) {
+			printf( "      %s  %s\n", $row['loc'], $row['msg'] );
+		}
+	}
+}
+
+/**
+ * Render the human-readable report (grouped or summary).
  *
  * @param array  $components Grouped findings.
  * @param array  $tally      Severity tally.
@@ -476,6 +551,8 @@ function render( array $components, array $tally, string $root, string $php, str
 		printf( "\n  ✓ Nothing blocks this upgrade.%s\n\n", $suppressed_note );
 		return;
 	}
+
+	render_fix_first( $components, $root );
 
 	foreach ( $components as $c ) {
 		$badge = $c['fatal'] > 0 ? sprintf( '  ✗ %d fatal', $c['fatal'] ) : '';

@@ -97,6 +97,8 @@ vendor/bin/pressready --php=8.4 --wp=6.9 --format=github --path=.
 `--format`: `grouped` (default) · `summary` · `json` · `github`
 `--fail-on`: `fatal` · `risky` · `deprecated`
 
+On a large `wp-content`, the grouped/summary output leads with a **fix-first block** — every `fatal` then every `risky` finding with a clickable `path:line` — so the issues that actually block an upgrade aren't buried under the deprecation tail. In an interactive terminal you also get a live progress meter while it scans (suppressed automatically when piped or in CI).
+
 ---
 
 ## WP-CLI
