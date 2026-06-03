@@ -54,6 +54,30 @@ class Command {
 	 * [--fail-on=<level>]
 	 * : Exit non-zero when findings at/above this level exist. One of: fatal, risky, deprecated.
 	 *
+	 * [--ignore-on=<level>]
+	 * : Hide findings at or below this level from output and tally. One of: fatal, risky, deprecated.
+	 *
+	 * [--parallel=<n>]
+	 * : Number of phpcs worker processes. Default: auto (CPU cores). Use 1 to disable.
+	 *
+	 * [--cache[=<file>]]
+	 * : Cache results between runs so re-scans only reprocess changed files.
+	 *
+	 * [--ignore=<patterns>]
+	 * : Extra comma-separated path patterns to skip (added to the built-in vendor/build/min/tests defaults).
+	 *
+	 * [--no-default-ignore]
+	 * : Do not apply the built-in ignore patterns (scan everything except --ignore).
+	 *
+	 * [--only=<needle>]
+	 * : Show only components whose name matches this substring (case-insensitive).
+	 *
+	 * [--top=<n>]
+	 * : Show only the N worst components (most fatals first).
+	 *
+	 * [--config=<file>]
+	 * : Load defaults from a JSON config file (CLI flags still win).
+	 *
 	 * ## EXAMPLES
 	 *
 	 *     # Will PHP 8.4 and WP 6.9 break this site, and where?
@@ -61,6 +85,12 @@ class Command {
 	 *
 	 *     # CI gate: fail only on real fatals.
 	 *     $ wp pressready scan --php=8.4 --fail-on=fatal
+	 *
+	 *     # Hide deprecation noise; only show fatals and risky changes.
+	 *     $ wp pressready scan --php=8.4 --ignore-on=deprecated
+	 *
+	 *     # Big stack: focus on the 10 worst components.
+	 *     $ wp pressready scan --php=8.4 --wp=6.9 --top=10
 	 *
 	 * @param array $args       Positional args (unused).
 	 * @param array $assoc_args Associative args.
@@ -72,13 +102,12 @@ class Command {
 		$since = (string) ( $assoc_args['since'] ?? '' );
 		$path  = (string) ( $args[0] ?? $this->default_path() );
 		$format = (string) ( $assoc_args['format'] ?? 'table' );
-		$failon = (string) ( $assoc_args['fail-on'] ?? '' );
 
 		if ( '' === $php && '' === $wp ) {
 			WP_CLI::error( 'Specify at least one target: --php=<ver> and/or --wp=<ver>.' );
 		}
 
-		$result = $this->run_engine( $php, $wp, $since, $path, $failon );
+		$result = $this->run_engine( $php, $wp, $since, $path, $assoc_args );
 		$data   = json_decode( $result['json'], true );
 		if ( ! is_array( $data ) || ! isset( $data['tally'] ) ) {
 			$detail = ( '' !== ( $result['stderr'] ?? '' ) )
@@ -114,14 +143,14 @@ class Command {
 	/**
 	 * Run the shared engine (bin/pressready) and capture its JSON + exit code.
 	 *
-	 * @param string $php    Target PHP version.
-	 * @param string $wp     Target WP version.
-	 * @param string $since  Optional since version.
-	 * @param string $path   Scan path.
-	 * @param string $failon Optional --fail-on level.
+	 * @param string $php        Target PHP version.
+	 * @param string $wp         Target WP version.
+	 * @param string $since      Optional since version.
+	 * @param string $path       Scan path.
+	 * @param array  $assoc_args All WP-CLI assoc args (passthrough flags forwarded).
 	 * @return array{json:string,code:int}
 	 */
-	private function run_engine( $php, $wp, $since, $path, $failon ) {
+	private function run_engine( $php, $wp, $since, $path, $assoc_args = array() ) {
 		$bin  = dirname( __DIR__, 2 ) . '/bin/pressready';
 		$args = array( $bin, '--format=json' );
 		if ( '' !== $php ) {
@@ -133,8 +162,19 @@ class Command {
 		if ( '' !== $since ) {
 			$args[] = '--since=' . $since;
 		}
-		if ( '' !== $failon ) {
-			$args[] = '--fail-on=' . $failon;
+
+		// Forward the shared scan flags to the engine. Value flags pass their value;
+		// bare flags pass when present (WP-CLI gives them the value `true`/'').
+		$value_flags = array( 'fail-on', 'ignore-on', 'parallel', 'cache', 'ignore', 'only', 'top', 'config' );
+		foreach ( $value_flags as $flag ) {
+			if ( isset( $assoc_args[ $flag ] ) && '' !== (string) $assoc_args[ $flag ] ) {
+				$args[] = '--' . $flag . '=' . $assoc_args[ $flag ];
+			}
+		}
+		foreach ( array( 'no-default-ignore', 'no-collapse', 'no-cache' ) as $flag ) {
+			if ( ! empty( $assoc_args[ $flag ] ) ) {
+				$args[] = '--' . $flag;
+			}
 		}
 		$args[] = '--path=' . $path;
 
@@ -190,10 +230,11 @@ class Command {
 		}
 
 		$bits = array();
-		foreach ( array( 'fatal' => 'fatal', 'risky' => 'risky' ) as $k => $label ) {
-			if ( ! empty( $tally[ $k ] ) ) {
-				$bits[] = $tally[ $k ] . ' ' . $label;
-			}
+		if ( ! empty( $tally['fatal'] ) ) {
+			$bits[] = WP_CLI::colorize( '%R' . $tally['fatal'] . ' fatal%n' );
+		}
+		if ( ! empty( $tally['risky'] ) ) {
+			$bits[] = WP_CLI::colorize( '%Y' . $tally['risky'] . ' risky%n' );
 		}
 		$deprecations = (int) ( $tally['php'] ?? 0 ) + (int) ( $tally['wp'] ?? 0 );
 		if ( $deprecations > 0 ) {

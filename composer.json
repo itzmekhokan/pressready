@@ -1,6 +1,6 @@
 {
     "name": "itzmekhokan/pressready",
-    "description": "Pressready — scan a WordPress site's whole stack for what breaks on a target PHP/WP version, before you upgrade.",
+    "description": "Is your WordPress site ready for the next PHP or WordPress version? Scan the whole installed stack and find out before you upgrade.",
     "type": "phpcodesniffer-standard",
     "keywords": ["wordpress", "phpcs", "phpcompatibility", "static-analysis", "upgrade", "compatibility", "deprecations"],
     "license": "GPL-2.0-or-later",

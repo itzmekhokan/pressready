@@ -1,13 +1,13 @@
 {
     "schema": 1,
-    "generated_at": "2026-05-31T02:19:44+00:00",
+    "generated_at": "2026-06-03T09:32:52+00:00",
     "source": {
         "wp_version": "7.1-alpha-62161-src"
     },
     "counts": {
-        "function": 384,
-        "method": 69,
-        "class": 3,
+        "function": 418,
+        "method": 76,
+        "class": 10,
         "file": 33,
         "hook": 51,
         "argument": 62
@@ -15,51 +15,40 @@
     "deprecations": {
         "function": {
             "__ngettext": {
-                "deprecated": "2.8.0",
-                "replacement": "_n()"
+                "deprecated": "2.8.0"
             },
             "__ngettext_noop": {
-                "deprecated": "2.8.0",
-                "replacement": "_n_noop()"
+                "deprecated": "2.8.0"
             },
             "_admin_bar_bump_cb": {
-                "deprecated": "6.4.0",
-                "replacement": "wp_enqueue_admin_bar_bump_styles"
+                "deprecated": "6.4.0"
             },
             "_c": {
-                "deprecated": "2.9.0",
-                "replacement": "_x()"
+                "deprecated": "2.9.0"
             },
             "_cmp_priority": {
-                "deprecated": "4.7.0",
-                "replacement": "wp_list_sort"
+                "deprecated": "4.7.0"
             },
             "_excerpt_render_inner_columns_blocks": {
-                "deprecated": "5.8.0",
-                "replacement": "_excerpt_render_inner_blocks()"
+                "deprecated": "5.8.0"
             },
             "_filter_query_attachment_filenames": {
-                "deprecated": "6.0.3",
-                "replacement": "add_filter( \"wp_allow_query_attachment_by_filename\", \"__return_true\" )"
+                "deprecated": "6.0.3"
             },
             "_flip_image_resource": {
-                "deprecated": "3.5.0",
-                "replacement": "WP_Image_Editor::flip()"
+                "deprecated": "3.5.0"
             },
             "_get_path_to_translation": {
-                "deprecated": "6.1.0",
-                "replacement": "WP_Textdomain_Registry"
+                "deprecated": "6.1.0"
             },
             "_get_path_to_translation_from_lang_dir": {
-                "deprecated": "6.1.0",
-                "replacement": "WP_Textdomain_Registry"
+                "deprecated": "6.1.0"
             },
             "_get_post_ancestors": {
                 "deprecated": "3.5.0"
             },
             "_inject_theme_attribute_in_block_template_content": {
-                "deprecated": "6.4.0",
-                "replacement": "traverse_and_serialize_blocks( parse_blocks( $template_content ), \"_inject_theme_attribute_in_template_part_block\" )"
+                "deprecated": "6.4.0"
             },
             "_insert_into_post_button": {
                 "deprecated": "3.5.0"
@@ -81,38 +70,34 @@
                 "deprecated": "3.9.0"
             },
             "_remove_theme_attribute_in_block_template_content": {
-                "deprecated": "6.4.0",
-                "replacement": "traverse_and_serialize_blocks( parse_blocks( $template_content ), \"_remove_theme_attribute_from_template_part_block\" )"
+                "deprecated": "6.4.0"
             },
             "_resolve_home_block_template": {
                 "deprecated": "6.2.0"
             },
             "_rotate_image_resource": {
-                "deprecated": "3.5.0",
-                "replacement": "WP_Image_Editor::rotate()"
+                "deprecated": "3.5.0"
+            },
+            "_save_post_hook": {
+                "deprecated": "3.5.0"
             },
             "_search_terms_tidy": {
                 "deprecated": "3.7.0"
             },
             "_sort_nav_menu_items": {
-                "deprecated": "4.7.0",
-                "replacement": "wp_list_sort()"
+                "deprecated": "4.7.0"
             },
             "_update_option": {
-                "deprecated": "4.4.0",
-                "replacement": "::update()"
+                "deprecated": "4.4.0"
             },
             "_update_theme_mod": {
-                "deprecated": "4.4.0",
-                "replacement": "::update()"
+                "deprecated": "4.4.0"
             },
             "_usort_terms_by_ID": {
-                "deprecated": "4.7.0",
-                "replacement": "wp_list_sort()"
+                "deprecated": "4.7.0"
             },
             "_usort_terms_by_name": {
-                "deprecated": "4.7.0",
-                "replacement": "wp_list_sort()"
+                "deprecated": "4.7.0"
             },
             "_wp_json_prepare_data": {
                 "deprecated": "5.3.0"
@@ -124,113 +109,101 @@
                 "deprecated": "5.3.0"
             },
             "_wp_register_meta_args_whitelist": {
-                "deprecated": "5.5.0",
-                "replacement": "_wp_register_meta_args_allowed_list()"
+                "deprecated": "5.5.0"
             },
             "_wp_theme_json_webfonts_handler": {
-                "deprecated": "6.4.0",
-                "replacement": "wp_print_font_faces"
+                "deprecated": "6.4.0"
             },
             "_wp_tinycolor_bound_alpha": {
                 "deprecated": "6.3.0"
             },
             "activate_sitewide_plugin": {
-                "deprecated": "3.0.0",
-                "replacement": "activate_plugin()"
+                "deprecated": "3.0.0"
             },
             "add_contextual_help": {
-                "deprecated": "3.3.0",
-                "replacement": "get_current_screen()->add_help_tab()"
+                "deprecated": "3.3.0"
             },
             "add_custom_background": {
-                "deprecated": "3.4.0",
-                "replacement": "add_theme_support( 'custom-background', $args )"
+                "deprecated": "3.4.0"
             },
             "add_custom_image_header": {
-                "deprecated": "3.4.0",
-                "replacement": "add_theme_support( 'custom-header', $args )"
+                "deprecated": "3.4.0"
             },
             "add_object_page": {
-                "deprecated": "4.5.0",
-                "replacement": "add_menu_page()"
+                "deprecated": "4.5.0"
             },
             "add_option_update_handler": {
-                "deprecated": "3.0.0",
-                "replacement": "register_setting()"
+                "deprecated": "3.0.0"
             },
             "add_option_whitelist": {
-                "deprecated": "5.5.0",
-                "replacement": "add_allowed_options()"
+                "deprecated": "5.5.0"
             },
             "add_utility_page": {
-                "deprecated": "4.5.0",
-                "replacement": "add_menu_page()"
+                "deprecated": "4.5.0"
             },
             "addslashes_gpc": {
-                "deprecated": "7.0.0",
-                "replacement": "wp_slash()"
+                "deprecated": "7.0.0"
+            },
+            "addslashes_strings_only": {
+                "deprecated": "5.6.0"
+            },
+            "attachment_fields_to_edit": {
+                "deprecated": "3.5.0"
             },
             "attribute_escape": {
-                "deprecated": "2.8.0",
-                "replacement": "esc_attr()"
+                "deprecated": "2.8.0"
             },
             "automatic_feed_links": {
-                "deprecated": "3.0.0",
-                "replacement": "add_theme_support( 'automatic-feed-links' )"
+                "deprecated": "3.0.0"
             },
             "block_core_file_ensure_interactivity_dependency": {
-                "deprecated": "6.5.0",
-                "replacement": "wp_register_script_module"
+                "deprecated": "6.5.0"
             },
             "block_core_image_ensure_interactivity_dependency": {
-                "deprecated": "6.5.0",
-                "replacement": "wp_register_script_module"
+                "deprecated": "6.5.0"
             },
             "block_core_navigation_block_contains_core_navigation": {
-                "deprecated": "7.0.0",
-                "replacement": "block_core_navigation_block_tree_has_block_type()"
+                "deprecated": "7.0.0"
             },
             "block_core_navigation_get_classic_menu_fallback": {
-                "deprecated": "6.3.0",
-                "replacement": "WP_Navigation_Fallback::get_classic_menu_fallback"
-            },
-            "block_core_navigation_get_classic_menu_fallback_blocks": {
-                "deprecated": "6.3.0",
-                "replacement": "WP_Navigation_Fallback::get_classic_menu_fallback_blocks"
-            },
-            "block_core_navigation_get_most_recently_published_navigation": {
-                "deprecated": "6.3.0",
-                "replacement": "WP_Navigation_Fallback::get_most_recently_published_navigation"
-            },
-            "block_core_navigation_maybe_use_classic_menu_fallback": {
-                "deprecated": "6.3.0",
-                "replacement": "WP_Navigation_Fallback::create_classic_menu_fallback"
-            },
-            "block_core_navigation_parse_blocks_from_menu_items": {
-                "deprecated": "6.3.0",
-                "replacement": "WP_Navigation_Fallback::parse_blocks_from_menu_items"
-            },
-            "block_core_navigation_submenu_build_css_colors": {
                 "deprecated": "6.3.0"
             },
+            "block_core_navigation_get_classic_menu_fallback_blocks": {
+                "deprecated": "6.3.0"
+            },
+            "block_core_navigation_get_most_recently_published_navigation": {
+                "deprecated": "6.3.0"
+            },
+            "block_core_navigation_maybe_use_classic_menu_fallback": {
+                "deprecated": "6.3.0"
+            },
+            "block_core_navigation_parse_blocks_from_menu_items": {
+                "deprecated": "6.3.0"
+            },
+            "block_core_navigation_submenu_build_css_colors": {
+                "deprecated": "6.3.0",
+                "replacement": "wp_apply_colors_support()"
+            },
             "block_core_query_ensure_interactivity_dependency": {
-                "deprecated": "6.5.0",
-                "replacement": "wp_register_script_module"
+                "deprecated": "6.5.0"
+            },
+            "blogger_getTemplate": {
+                "deprecated": "3.5.0"
+            },
+            "blogger_setTemplate": {
+                "deprecated": "3.5.0"
             },
             "clean_page_cache": {
-                "deprecated": "3.4.0",
-                "replacement": "clean_post_cache()"
+                "deprecated": "3.4.0"
             },
             "clean_pre": {
                 "deprecated": "3.4.0"
             },
             "clean_url": {
-                "deprecated": "3.0.0",
-                "replacement": "sanitize_url()"
+                "deprecated": "3.0.0"
             },
             "clear_global_post_cache": {
-                "deprecated": "3.0.0",
-                "replacement": "clean_post_cache()"
+                "deprecated": "3.0.0"
             },
             "codepress_footer_js": {
                 "deprecated": "3.0.0"
@@ -245,27 +218,25 @@
                 "deprecated": "4.5.0"
             },
             "comments_rss": {
-                "deprecated": "2.2.0",
-                "replacement": "get_post_comments_feed_link()"
+                "deprecated": "2.2.0"
             },
             "comments_rss_link": {
-                "deprecated": "2.5.0",
-                "replacement": "post_comments_feed_link()"
+                "deprecated": "2.5.0"
             },
             "create_attachment_object": {
-                "deprecated": "6.5.0",
-                "replacement": "wp_copy_parent_attachment_properties()"
+                "deprecated": "6.5.0"
             },
             "create_empty_blog": {
                 "deprecated": "4.4.0"
             },
             "create_user": {
-                "deprecated": "2.0.0",
-                "replacement": "wp_create_user()"
+                "deprecated": "2.0.0"
             },
             "current_theme_info": {
-                "deprecated": "3.4.0",
-                "replacement": "wp_get_theme()"
+                "deprecated": "3.4.0"
+            },
+            "current_user_can_for_blog": {
+                "deprecated": "6.7.0"
             },
             "customize_preview_base": {
                 "deprecated": "4.7.0"
@@ -280,28 +251,25 @@
                 "deprecated": "4.7.0"
             },
             "deactivate_sitewide_plugin": {
-                "deprecated": "3.0.0",
-                "replacement": "deactivate_plugin()"
+                "deprecated": "3.0.0"
             },
             "debug_fclose": {
-                "deprecated": "3.4.0",
-                "replacement": "error_log()"
+                "deprecated": "3.4.0"
             },
             "debug_fopen": {
-                "deprecated": "3.4.0",
-                "replacement": "error_log()"
+                "deprecated": "3.4.0"
             },
             "debug_fwrite": {
-                "deprecated": "3.4.0",
-                "replacement": "error_log()"
+                "deprecated": "3.4.0"
             },
             "default_additional_properties_to_false": {
-                "deprecated": "5.6.0",
-                "replacement": "rest_default_additional_properties_to_false()"
+                "deprecated": "5.6.0"
+            },
+            "default_topic_count_text": {
+                "deprecated": "3.9.0"
             },
             "delete_usermeta": {
-                "deprecated": "3.0.0",
-                "replacement": "delete_user_meta()"
+                "deprecated": "3.0.0"
             },
             "display_theme": {
                 "deprecated": "3.4.0"
@@ -310,95 +278,82 @@
                 "deprecated": "2.5.0"
             },
             "dropdown_categories": {
-                "deprecated": "2.6.0",
-                "replacement": "wp_category_checklist()"
+                "deprecated": "2.6.0"
             },
             "dropdown_cats": {
-                "deprecated": "2.1.0",
-                "replacement": "wp_dropdown_categories()"
+                "deprecated": "2.1.0"
             },
             "dropdown_link_categories": {
-                "deprecated": "2.6.0",
-                "replacement": "wp_link_category_checklist()"
+                "deprecated": "2.6.0"
             },
             "favorite_actions": {
-                "deprecated": "3.2.0",
-                "replacement": "WP_Admin_Bar"
+                "deprecated": "3.2.0"
+            },
+            "filter_upload_tabs": {
+                "deprecated": "3.5.0"
             },
             "flush_widget_cache": {
                 "deprecated": "4.4.0"
             },
             "force_ssl_login": {
-                "deprecated": "4.4.0",
-                "replacement": "force_ssl_admin()"
+                "deprecated": "4.4.0"
             },
             "format_to_post": {
                 "deprecated": "3.9.0"
+            },
+            "funky_javascript_callback": {
+                "deprecated": "3.0.0"
             },
             "funky_javascript_fix": {
                 "deprecated": "3.0.0"
             },
             "gd_edit_image_support": {
-                "deprecated": "3.5.0",
-                "replacement": "wp_image_editor_supports()"
+                "deprecated": "3.5.0"
             },
             "generate_random_password": {
-                "deprecated": "3.0.0",
-                "replacement": "wp_generate_password()"
+                "deprecated": "3.0.0"
             },
             "get_admin_users_for_domain": {
                 "deprecated": "4.4.0"
             },
             "get_all_category_ids": {
-                "deprecated": "4.0.0",
-                "replacement": "get_terms()"
+                "deprecated": "4.0.0"
             },
             "get_alloptions": {
-                "deprecated": "3.0.0",
-                "replacement": "wp_load_alloptions()"
+                "deprecated": "3.0.0"
             },
             "get_allowed_themes": {
-                "deprecated": "3.4.0",
-                "replacement": "wp_get_themes( array( 'allowed' => true ) )"
+                "deprecated": "3.4.0"
             },
             "get_archives": {
-                "deprecated": "2.1.0",
-                "replacement": "wp_get_archives()"
+                "deprecated": "2.1.0"
             },
             "get_attachment_icon": {
-                "deprecated": "2.5.0",
-                "replacement": "wp_get_attachment_image()"
+                "deprecated": "2.5.0"
             },
             "get_attachment_icon_src": {
-                "deprecated": "2.5.0",
-                "replacement": "wp_get_attachment_image_src()"
+                "deprecated": "2.5.0"
             },
             "get_attachment_innerHTML": {
-                "deprecated": "2.5.0",
-                "replacement": "wp_get_attachment_image()"
+                "deprecated": "2.5.0"
             },
             "get_author_link": {
-                "deprecated": "2.1.0",
-                "replacement": "get_author_posts_url()"
+                "deprecated": "2.1.0"
             },
             "get_author_name": {
-                "deprecated": "2.8.0",
-                "replacement": "get_the_author_meta('display_name')"
+                "deprecated": "2.8.0"
             },
             "get_author_rss_link": {
-                "deprecated": "2.5.0",
-                "replacement": "get_author_feed_link()"
+                "deprecated": "2.5.0"
             },
             "get_author_user_ids": {
-                "deprecated": "3.1.0",
-                "replacement": "get_users()"
+                "deprecated": "3.1.0"
             },
             "get_autotoggle": {
                 "deprecated": "2.1.0"
             },
             "get_blog_list": {
-                "deprecated": "3.0.0",
-                "replacement": "wp_get_sites()"
+                "deprecated": "3.0.0"
             },
             "get_blogaddress_by_domain": {
                 "deprecated": "3.7.0"
@@ -407,105 +362,82 @@
                 "deprecated": "3.3.0"
             },
             "get_broken_themes": {
-                "deprecated": "3.4.0",
-                "replacement": "wp_get_themes( array( 'errors' => true )"
+                "deprecated": "3.4.0"
             },
             "get_category_children": {
-                "deprecated": "2.8.0",
-                "replacement": "get_term_children()"
+                "deprecated": "2.8.0"
             },
             "get_category_rss_link": {
-                "deprecated": "2.5.0",
-                "replacement": "get_category_feed_link()"
+                "deprecated": "2.5.0"
             },
             "get_catname": {
-                "deprecated": "2.8.0",
-                "replacement": "get_cat_name()"
+                "deprecated": "2.8.0"
             },
             "get_commentdata": {
-                "deprecated": "2.7.0",
-                "replacement": "get_comment()"
+                "deprecated": "2.7.0"
             },
             "get_comments_popup_template": {
                 "deprecated": "4.5.0"
             },
             "get_current_site_name": {
-                "deprecated": "3.9.0",
-                "replacement": "get_current_site()"
+                "deprecated": "3.9.0"
             },
             "get_current_theme": {
-                "deprecated": "3.4.0",
-                "replacement": "wp_get_theme()"
+                "deprecated": "3.4.0"
             },
             "get_currentuserinfo": {
-                "deprecated": "4.5.0",
-                "replacement": "wp_get_current_user()"
+                "deprecated": "4.5.0"
             },
             "get_dashboard_blog": {
-                "deprecated": "3.1.0",
-                "replacement": "get_site()"
+                "deprecated": "3.1.0"
             },
             "get_default_page_to_edit": {
-                "deprecated": "3.5.0",
-                "replacement": "get_default_post_to_edit( 'page' )"
+                "deprecated": "3.5.0"
             },
             "get_editable_authors": {
-                "deprecated": "3.1.0",
-                "replacement": "get_users()"
+                "deprecated": "3.1.0"
             },
             "get_editable_user_ids": {
-                "deprecated": "3.1.0",
-                "replacement": "get_users()"
+                "deprecated": "3.1.0"
             },
             "get_index_rel_link": {
                 "deprecated": "3.3.0"
             },
             "get_link": {
-                "deprecated": "2.1.0",
-                "replacement": "get_bookmark()"
+                "deprecated": "2.1.0"
             },
             "get_linkcatname": {
-                "deprecated": "2.1.0",
-                "replacement": "get_category()"
+                "deprecated": "2.1.0"
             },
             "get_linkobjects": {
-                "deprecated": "2.1.0",
-                "replacement": "get_bookmarks()"
+                "deprecated": "2.1.0"
             },
             "get_linkobjectsbyname": {
-                "deprecated": "2.1.0",
-                "replacement": "get_bookmarks()"
+                "deprecated": "2.1.0"
             },
             "get_linkrating": {
-                "deprecated": "2.1.0",
-                "replacement": "sanitize_bookmark_field()"
+                "deprecated": "2.1.0"
             },
             "get_links": {
-                "deprecated": "2.1.0",
-                "replacement": "get_bookmarks()"
+                "deprecated": "2.1.0"
             },
             "get_links_list": {
-                "deprecated": "2.1.0",
-                "replacement": "wp_list_bookmarks()"
+                "deprecated": "2.1.0"
             },
             "get_links_withrating": {
-                "deprecated": "2.1.0",
-                "replacement": "get_bookmarks()"
+                "deprecated": "2.1.0"
             },
             "get_linksbyname": {
-                "deprecated": "2.1.0",
-                "replacement": "get_bookmarks()"
+                "deprecated": "2.1.0"
             },
             "get_linksbyname_withrating": {
-                "deprecated": "2.1.0",
-                "replacement": "get_bookmarks()"
+                "deprecated": "2.1.0"
             },
             "get_most_active_blogs": {
                 "deprecated": "3.0.0"
             },
             "get_nonauthor_user_ids": {
-                "deprecated": "3.1.0",
-                "replacement": "get_users()"
+                "deprecated": "3.1.0"
             },
             "get_others_drafts": {
                 "deprecated": "3.1.0"
@@ -516,9 +448,11 @@
             "get_others_unpublished_posts": {
                 "deprecated": "3.1.0"
             },
+            "get_page": {
+                "deprecated": "3.5.0"
+            },
             "get_page_by_title": {
-                "deprecated": "6.2.0",
-                "replacement": "WP_Query"
+                "deprecated": "6.2.0"
             },
             "get_paged_template": {
                 "deprecated": "4.7.0"
@@ -527,16 +461,13 @@
                 "deprecated": "3.3.0"
             },
             "get_post_to_edit": {
-                "deprecated": "3.5.0",
-                "replacement": "get_post()"
+                "deprecated": "3.5.0"
             },
             "get_postdata": {
-                "deprecated": "1.5.1",
-                "replacement": "get_post()"
+                "deprecated": "1.5.1"
             },
             "get_profile": {
-                "deprecated": "3.0.0",
-                "replacement": "get_the_author_meta()"
+                "deprecated": "3.0.0"
             },
             "get_real_file_to_edit": {
                 "deprecated": "2.9.0"
@@ -545,114 +476,88 @@
                 "deprecated": "3.8.0"
             },
             "get_settings": {
-                "deprecated": "2.1.0",
-                "replacement": "get_option()"
+                "deprecated": "2.1.0"
             },
             "get_shortcut_link": {
                 "deprecated": "4.9.0"
             },
             "get_site_allowed_themes": {
-                "deprecated": "3.4.0",
-                "replacement": "WP_Theme::get_allowed_on_network()"
+                "deprecated": "3.4.0"
             },
             "get_the_attachment_link": {
-                "deprecated": "2.5.0",
-                "replacement": "wp_get_attachment_link()"
+                "deprecated": "2.5.0"
             },
             "get_the_author_ID": {
-                "deprecated": "2.8.0",
-                "replacement": "get_the_author_meta('ID')"
+                "deprecated": "2.8.0"
             },
             "get_the_author_aim": {
-                "deprecated": "2.8.0",
-                "replacement": "get_the_author_meta('aim')"
+                "deprecated": "2.8.0"
             },
             "get_the_author_description": {
-                "deprecated": "2.8.0",
-                "replacement": "get_the_author_meta('description')"
+                "deprecated": "2.8.0"
             },
             "get_the_author_email": {
-                "deprecated": "2.8.0",
-                "replacement": "get_the_author_meta('email')"
+                "deprecated": "2.8.0"
             },
             "get_the_author_firstname": {
-                "deprecated": "2.8.0",
-                "replacement": "get_the_author_meta('first_name')"
+                "deprecated": "2.8.0"
             },
             "get_the_author_icq": {
-                "deprecated": "2.8.0",
-                "replacement": "get_the_author_meta('icq')"
+                "deprecated": "2.8.0"
             },
             "get_the_author_lastname": {
-                "deprecated": "2.8.0",
-                "replacement": "get_the_author_meta('last_name')"
+                "deprecated": "2.8.0"
             },
             "get_the_author_login": {
-                "deprecated": "2.8.0",
-                "replacement": "get_the_author_meta('login')"
+                "deprecated": "2.8.0"
             },
             "get_the_author_msn": {
-                "deprecated": "2.8.0",
-                "replacement": "get_the_author_meta('msn')"
+                "deprecated": "2.8.0"
             },
             "get_the_author_nickname": {
-                "deprecated": "2.8.0",
-                "replacement": "get_the_author_meta('nickname')"
+                "deprecated": "2.8.0"
             },
             "get_the_author_url": {
-                "deprecated": "2.8.0",
-                "replacement": "get_the_author_meta('url')"
+                "deprecated": "2.8.0"
             },
             "get_the_author_yim": {
-                "deprecated": "2.8.0",
-                "replacement": "get_the_author_meta('yim')"
+                "deprecated": "2.8.0"
             },
             "get_theme": {
-                "deprecated": "3.4.0",
-                "replacement": "wp_get_theme( $stylesheet )"
+                "deprecated": "3.4.0"
             },
             "get_theme_data": {
-                "deprecated": "3.4.0",
-                "replacement": "wp_get_theme()"
+                "deprecated": "3.4.0"
             },
             "get_themes": {
-                "deprecated": "3.4.0",
-                "replacement": "wp_get_themes()"
+                "deprecated": "3.4.0"
             },
             "get_udims": {
-                "deprecated": "3.5.0",
-                "replacement": "wp_constrain_dimensions()"
+                "deprecated": "3.5.0"
             },
             "get_user_by_email": {
-                "deprecated": "3.3.0",
-                "replacement": "get_user_by('email')"
+                "deprecated": "3.3.0"
             },
             "get_user_details": {
-                "deprecated": "3.0.0",
-                "replacement": "get_user_by()"
+                "deprecated": "3.0.0"
             },
             "get_user_id_from_string": {
-                "deprecated": "3.6.0",
-                "replacement": "get_user_by()"
+                "deprecated": "3.6.0"
             },
             "get_user_metavalues": {
                 "deprecated": "3.3.0"
             },
             "get_userdatabylogin": {
-                "deprecated": "3.3.0",
-                "replacement": "get_user_by('login')"
+                "deprecated": "3.3.0"
             },
             "get_usermeta": {
-                "deprecated": "3.0.0",
-                "replacement": "get_user_meta()"
+                "deprecated": "3.0.0"
             },
             "get_usernumposts": {
-                "deprecated": "3.0.0",
-                "replacement": "count_user_posts()"
+                "deprecated": "3.0.0"
             },
             "get_users_of_blog": {
-                "deprecated": "3.1.0",
-                "replacement": "get_users()"
+                "deprecated": "3.1.0"
             },
             "global_terms": {
                 "deprecated": "6.1.0"
@@ -661,8 +566,7 @@
                 "deprecated": "6.1.0"
             },
             "graceful_fail": {
-                "deprecated": "3.0.0",
-                "replacement": "wp_die()"
+                "deprecated": "3.0.0"
             },
             "gzip_compression": {
                 "deprecated": "2.5.0"
@@ -671,15 +575,13 @@
                 "deprecated": "6.0.0"
             },
             "image_resize": {
-                "deprecated": "3.5.0",
-                "replacement": "wp_get_image_editor()"
+                "deprecated": "3.5.0"
             },
             "index_rel_link": {
                 "deprecated": "3.3.0"
             },
             "insert_blog": {
-                "deprecated": "5.1.0",
-                "replacement": "wp_insert_site()"
+                "deprecated": "5.1.0"
             },
             "install_blog": {
                 "deprecated": "5.1.0"
@@ -688,45 +590,37 @@
                 "deprecated": "6.1.0"
             },
             "install_themes_feature_list": {
-                "deprecated": "3.1.0",
-                "replacement": "get_theme_feature_list()"
+                "deprecated": "3.1.0"
             },
             "is_blog_user": {
-                "deprecated": "3.3.0",
-                "replacement": "is_user_member_of_blog()"
+                "deprecated": "3.3.0"
             },
             "is_comments_popup": {
                 "deprecated": "4.5.0"
             },
             "is_main_blog": {
-                "deprecated": "3.0.0",
-                "replacement": "is_main_site()"
+                "deprecated": "3.0.0"
             },
             "is_plugin_page": {
                 "deprecated": "3.1.0"
             },
             "is_site_admin": {
-                "deprecated": "3.0.0",
-                "replacement": "is_super_admin()"
+                "deprecated": "3.0.0"
             },
             "is_taxonomy": {
-                "deprecated": "3.0.0",
-                "replacement": "taxonomy_exists()"
+                "deprecated": "3.0.0"
             },
             "is_term": {
-                "deprecated": "3.0.0",
-                "replacement": "term_exists()"
+                "deprecated": "3.0.0"
             },
             "is_user_option_local": {
                 "deprecated": "4.9.0"
             },
             "is_wpmu_sitewide_plugin": {
-                "deprecated": "3.0.0",
-                "replacement": "is_network_only_plugin()"
+                "deprecated": "3.0.0"
             },
             "js_escape": {
-                "deprecated": "2.8.0",
-                "replacement": "esc_js()"
+                "deprecated": "2.8.0"
             },
             "lazyload_comment_meta": {
                 "deprecated": "4.5.0"
@@ -735,68 +629,61 @@
                 "deprecated": "4.5.0"
             },
             "like_escape": {
-                "deprecated": "4.0.0",
-                "replacement": "wpdb::esc_like()"
+                "deprecated": "4.0.0"
             },
             "link_pages": {
-                "deprecated": "2.1.0",
-                "replacement": "wp_link_pages()"
+                "deprecated": "2.1.0"
             },
             "links_popup_script": {
                 "deprecated": "2.1.0"
             },
             "list_authors": {
-                "deprecated": "2.1.0",
-                "replacement": "wp_list_authors()"
+                "deprecated": "2.1.0"
             },
             "list_cats": {
-                "deprecated": "2.1.0",
-                "replacement": "wp_list_categories()"
+                "deprecated": "2.1.0"
             },
             "logIO": {
-                "deprecated": "3.4.0",
-                "replacement": "error_log()"
+                "deprecated": "3.4.0"
             },
             "make_url_footnote": {
                 "deprecated": "2.9.0"
             },
             "media_upload_audio": {
-                "deprecated": "3.3.0",
-                "replacement": "wp_media_upload_handler()"
+                "deprecated": "3.3.0"
             },
             "media_upload_file": {
-                "deprecated": "3.3.0",
-                "replacement": "wp_media_upload_handler()"
+                "deprecated": "3.3.0"
             },
             "media_upload_image": {
-                "deprecated": "3.3.0",
-                "replacement": "wp_media_upload_handler()"
+                "deprecated": "3.3.0"
             },
             "media_upload_video": {
-                "deprecated": "3.3.0",
-                "replacement": "wp_media_upload_handler()"
+                "deprecated": "3.3.0"
+            },
+            "ms_deprecated_blogs_file": {
+                "deprecated": "3.5.0"
             },
             "mu_options": {
                 "deprecated": "3.0.0"
             },
             "next_post": {
-                "deprecated": "2.0.0",
-                "replacement": "next_post_link()"
+                "deprecated": "2.0.0"
             },
             "noindex": {
-                "deprecated": "5.7.0",
-                "replacement": "wp_robots_noindex()"
+                "deprecated": "5.7.0"
+            },
+            "options_permalink_add_js": {
+                "deprecated": "4.9.0"
             },
             "parent_post_rel_link": {
                 "deprecated": "3.3.0"
             },
             "permalink_link": {
-                "deprecated": "1.2.0",
-                "replacement": "the_permalink()"
+                "deprecated": "1.2.0"
             },
             "permalink_single_rss": {
-                "deprecated": "2.3.0",
-                "replacement": "the_permalink_rss()"
+                "deprecated": "2.3.0"
             },
             "popuplinks": {
                 "deprecated": "4.5.0"
@@ -805,16 +692,15 @@
                 "deprecated": "4.6.0"
             },
             "post_permalink": {
-                "deprecated": "4.4.0",
-                "replacement": "get_permalink()"
+                "deprecated": "4.4.0"
             },
             "prepreview_added_sidebars_widgets": {
                 "deprecated": "4.2.0",
-                "replacement": "customize_dynamic_setting_args"
+                "replacement": "'customize_dynamic_setting_args'"
             },
             "prepreview_added_widget_instance": {
                 "deprecated": "4.2.0",
-                "replacement": "customize_dynamic_setting_args"
+                "replacement": "'customize_dynamic_setting_args'"
             },
             "preview_theme": {
                 "deprecated": "4.3.0"
@@ -826,60 +712,48 @@
                 "deprecated": "4.3.0"
             },
             "previous_post": {
-                "deprecated": "2.0.0",
-                "replacement": "previous_post_link()"
+                "deprecated": "2.0.0"
             },
             "print_embed_styles": {
-                "deprecated": "6.4.0",
-                "replacement": "wp_enqueue_embed_styles"
+                "deprecated": "6.4.0"
             },
             "print_emoji_styles": {
-                "deprecated": "6.4.0",
-                "replacement": "wp_enqueue_emoji_styles"
+                "deprecated": "6.4.0"
             },
             "print_inline_script": {
-                "deprecated": "6.3.0",
-                "replacement": "WP_Scripts::get_inline_script_data() or WP_Scripts::get_inline_script_tag()"
+                "deprecated": "6.3.0"
             },
             "print_router_loading_and_screen_reader_markup": {
                 "deprecated": "6.7.0",
                 "replacement": "WP_Interactivity_API::print_router_markup"
             },
             "readonly": {
-                "deprecated": "5.9.0",
-                "replacement": "wp_readonly()"
+                "deprecated": "5.9.0"
             },
             "recursive_render": {
-                "deprecated": "3.3.0",
-                "replacement": "WP_Admin_bar::render(), WP_Admin_Bar::_render_item()"
+                "deprecated": "3.3.0"
             },
             "register_sidebar_widget": {
-                "deprecated": "2.8.0",
-                "replacement": "wp_register_sidebar_widget()"
+                "deprecated": "2.8.0"
             },
             "register_widget_control": {
-                "deprecated": "2.8.0",
-                "replacement": "wp_register_widget_control()"
+                "deprecated": "2.8.0"
             },
             "remove_custom_background": {
-                "deprecated": "3.4.0",
-                "replacement": "remove_theme_support( 'custom-background' )"
+                "deprecated": "3.4.0"
             },
             "remove_custom_image_header": {
-                "deprecated": "3.4.0",
-                "replacement": "remove_theme_support( 'custom-header' )"
+                "deprecated": "3.4.0"
             },
             "remove_option_update_handler": {
-                "deprecated": "3.0.0",
-                "replacement": "unregister_setting()"
+                "deprecated": "3.0.0"
             },
             "remove_option_whitelist": {
-                "deprecated": "5.5.0",
-                "replacement": "remove_allowed_options()"
+                "deprecated": "5.5.0"
             },
             "remove_prepreview_filters": {
                 "deprecated": "4.2.0",
-                "replacement": "customize_dynamic_setting_args"
+                "replacement": "'customize_dynamic_setting_args'"
             },
             "remove_preview_signature": {
                 "deprecated": "4.7.0"
@@ -897,35 +771,33 @@
                 "deprecated": "3.8.0"
             },
             "screen_layout": {
-                "deprecated": "3.3.0",
-                "replacement": "$current_screen->render_screen_layout()"
+                "deprecated": "3.3.0"
+            },
+            "screen_meta": {
+                "deprecated": "3.3.0"
             },
             "screen_options": {
-                "deprecated": "3.3.0",
-                "replacement": "$current_screen->render_per_page_options()"
+                "deprecated": "3.3.0"
             },
             "seems_utf8": {
                 "deprecated": "6.9.0",
                 "replacement": "wp_is_valid_utf8()"
             },
             "set_current_user": {
-                "deprecated": "3.0.0",
-                "replacement": "wp_set_current_user()"
+                "deprecated": "3.0.0"
             },
             "setup_widget_addition_previews": {
                 "deprecated": "4.2.0",
-                "replacement": "customize_dynamic_setting_args"
+                "replacement": "'customize_dynamic_setting_args'"
             },
             "start_post_rel_link": {
                 "deprecated": "3.3.0"
             },
             "start_wp": {
-                "deprecated": "1.5.0",
-                "replacement": "new WordPress Loop"
+                "deprecated": "1.5.0"
             },
             "sticky_class": {
-                "deprecated": "3.5.0",
-                "replacement": "post_class()"
+                "deprecated": "3.5.0"
             },
             "sync_category_tag_slugs": {
                 "deprecated": "6.1.0"
@@ -934,123 +806,98 @@
                 "deprecated": "3.7.0"
             },
             "the_author_ID": {
-                "deprecated": "2.8.0",
-                "replacement": "the_author_meta('ID')"
+                "deprecated": "2.8.0"
             },
             "the_author_aim": {
-                "deprecated": "2.8.0",
-                "replacement": "the_author_meta('aim')"
+                "deprecated": "2.8.0"
             },
             "the_author_description": {
-                "deprecated": "2.8.0",
-                "replacement": "the_author_meta('description')"
+                "deprecated": "2.8.0"
             },
             "the_author_email": {
-                "deprecated": "2.8.0",
-                "replacement": "the_author_meta('email')"
+                "deprecated": "2.8.0"
             },
             "the_author_firstname": {
-                "deprecated": "2.8.0",
-                "replacement": "the_author_meta('first_name')"
+                "deprecated": "2.8.0"
             },
             "the_author_icq": {
-                "deprecated": "2.8.0",
-                "replacement": "the_author_meta('icq')"
+                "deprecated": "2.8.0"
             },
             "the_author_lastname": {
-                "deprecated": "2.8.0",
-                "replacement": "the_author_meta('last_name')"
+                "deprecated": "2.8.0"
             },
             "the_author_login": {
-                "deprecated": "2.8.0",
-                "replacement": "the_author_meta('login')"
+                "deprecated": "2.8.0"
             },
             "the_author_msn": {
-                "deprecated": "2.8.0",
-                "replacement": "the_author_meta('msn')"
+                "deprecated": "2.8.0"
             },
             "the_author_nickname": {
-                "deprecated": "2.8.0",
-                "replacement": "the_author_meta('nickname')"
+                "deprecated": "2.8.0"
             },
             "the_author_url": {
-                "deprecated": "2.8.0",
-                "replacement": "the_author_meta('url')"
+                "deprecated": "2.8.0"
             },
             "the_author_yim": {
-                "deprecated": "2.8.0",
-                "replacement": "the_author_meta('yim')"
+                "deprecated": "2.8.0"
             },
             "the_block_template_skip_link": {
-                "deprecated": "6.4.0",
-                "replacement": "wp_enqueue_block_template_skip_link()"
+                "deprecated": "6.4.0"
             },
             "the_category_ID": {
-                "deprecated": "0.71",
-                "replacement": "get_the_category()"
+                "deprecated": "0.71"
             },
             "the_category_head": {
-                "deprecated": "0.71",
-                "replacement": "get_the_category_by_ID()"
+                "deprecated": "0.71"
             },
             "the_content_rss": {
-                "deprecated": "2.9.0",
-                "replacement": "the_content_feed()"
+                "deprecated": "2.9.0"
             },
             "the_editor": {
-                "deprecated": "3.3.0",
-                "replacement": "wp_editor()"
+                "deprecated": "3.3.0"
             },
             "the_meta": {
-                "deprecated": "6.0.2",
-                "replacement": "get_post_meta()"
+                "deprecated": "6.0.2"
             },
             "tinymce_include": {
-                "deprecated": "2.1.0",
-                "replacement": "wp_editor()"
+                "deprecated": "2.1.0"
             },
             "translate_with_context": {
                 "deprecated": "2.9.0",
                 "replacement": "_x()"
             },
             "type_url_form_audio": {
-                "deprecated": "3.3.0",
-                "replacement": "wp_media_insert_url_form('audio')"
+                "deprecated": "3.3.0"
             },
             "type_url_form_file": {
-                "deprecated": "3.3.0",
-                "replacement": "wp_media_insert_url_form('file')"
+                "deprecated": "3.3.0"
             },
             "type_url_form_image": {
-                "deprecated": "3.3.0",
-                "replacement": "wp_media_insert_url_form('image')"
+                "deprecated": "3.3.0"
             },
             "type_url_form_video": {
-                "deprecated": "3.3.0",
-                "replacement": "wp_media_insert_url_form('video')"
+                "deprecated": "3.3.0"
             },
             "unregister_sidebar_widget": {
-                "deprecated": "2.8.0",
-                "replacement": "wp_unregister_sidebar_widget()"
+                "deprecated": "2.8.0"
             },
             "unregister_widget_control": {
-                "deprecated": "2.8.0",
-                "replacement": "wp_unregister_widget_control()"
+                "deprecated": "2.8.0"
             },
             "update_category_cache": {
                 "deprecated": "3.1.0"
             },
             "update_page_cache": {
-                "deprecated": "3.4.0",
-                "replacement": "update_post_cache()"
+                "deprecated": "3.4.0"
             },
             "update_user_status": {
-                "deprecated": "5.3.0",
-                "replacement": "wp_update_user()"
+                "deprecated": "5.3.0"
             },
             "update_usermeta": {
-                "deprecated": "3.0.0",
-                "replacement": "update_user_meta()"
+                "deprecated": "3.0.0"
+            },
+            "upgrade_500": {
+                "deprecated": "5.1.0"
             },
             "url_is_accessable_via_ssl": {
                 "deprecated": "4.0.0"
@@ -1059,44 +906,34 @@
                 "deprecated": "3.0.0"
             },
             "user_can_create_draft": {
-                "deprecated": "2.0.0",
-                "replacement": "current_user_can()"
+                "deprecated": "2.0.0"
             },
             "user_can_create_post": {
-                "deprecated": "2.0.0",
-                "replacement": "current_user_can()"
+                "deprecated": "2.0.0"
             },
             "user_can_delete_post": {
-                "deprecated": "2.0.0",
-                "replacement": "current_user_can()"
+                "deprecated": "2.0.0"
             },
             "user_can_delete_post_comments": {
-                "deprecated": "2.0.0",
-                "replacement": "current_user_can()"
+                "deprecated": "2.0.0"
             },
             "user_can_edit_post": {
-                "deprecated": "2.0.0",
-                "replacement": "current_user_can()"
+                "deprecated": "2.0.0"
             },
             "user_can_edit_post_comments": {
-                "deprecated": "2.0.0",
-                "replacement": "current_user_can()"
+                "deprecated": "2.0.0"
             },
             "user_can_edit_post_date": {
-                "deprecated": "2.0.0",
-                "replacement": "current_user_can()"
+                "deprecated": "2.0.0"
             },
             "user_can_edit_user": {
-                "deprecated": "2.0.0",
-                "replacement": "current_user_can()"
+                "deprecated": "2.0.0"
             },
             "user_can_set_post_date": {
-                "deprecated": "2.0.0",
-                "replacement": "current_user_can()"
+                "deprecated": "2.0.0"
             },
             "user_pass_ok": {
-                "deprecated": "3.5.0",
-                "replacement": "wp_authenticate()"
+                "deprecated": "3.5.0"
             },
             "utf8_decode": {
                 "deprecated": "6.9.0",
@@ -1107,15 +944,13 @@
                 "replacement": "mb_convert_encoding"
             },
             "validate_email": {
-                "deprecated": "3.0.0",
-                "replacement": "is_email()"
+                "deprecated": "3.0.0"
             },
             "wlwmanifest_link": {
                 "deprecated": "6.3.0"
             },
             "wp_add_editor_classic_theme_styles": {
-                "deprecated": "6.8.0",
-                "replacement": "wp_enqueue_classic_theme_styles"
+                "deprecated": "6.8.0"
             },
             "wp_add_iframed_editor_assets_html": {
                 "deprecated": "6.0.0"
@@ -1124,8 +959,19 @@
                 "deprecated": "3.3.0"
             },
             "wp_admin_bar_header": {
-                "deprecated": "6.4.0",
-                "replacement": "wp_enqueue_admin_bar_header_styles"
+                "deprecated": "6.4.0"
+            },
+            "wp_ajax_health_check_background_updates": {
+                "deprecated": "5.6.0"
+            },
+            "wp_ajax_health_check_dotorg_communication": {
+                "deprecated": "5.6.0"
+            },
+            "wp_ajax_health_check_get_sizes": {
+                "deprecated": "5.6.0"
+            },
+            "wp_ajax_health_check_loopback_requests": {
+                "deprecated": "5.6.0"
             },
             "wp_ajax_press_this_add_category": {
                 "deprecated": "4.9.0"
@@ -1133,51 +979,79 @@
             "wp_ajax_press_this_save_post": {
                 "deprecated": "4.9.0"
             },
+            "wp_ajax_wp_fullscreen_save_post": {
+                "deprecated": "4.3.0"
+            },
             "wp_blacklist_check": {
-                "deprecated": "5.5.0",
-                "replacement": "wp_check_comment_disallowed_list()"
+                "deprecated": "5.5.0"
             },
             "wp_cache_reset": {
-                "deprecated": "3.5.0",
-                "replacement": "wp_cache_switch_to_blog()"
+                "deprecated": "3.5.0"
             },
             "wp_clearcookie": {
-                "deprecated": "2.5.0",
-                "replacement": "wp_clear_auth_cookie()"
+                "deprecated": "2.5.0"
+            },
+            "wp_clone": {
+                "deprecated": "3.2.0"
             },
             "wp_convert_bytes_to_hr": {
-                "deprecated": "3.6.0",
-                "replacement": "size_format()"
+                "deprecated": "3.6.0"
             },
             "wp_create_block_style_variation_instance_name": {
                 "deprecated": "6.7.0",
-                "replacement": "wp_unique_id"
+                "replacement": "wp_unique_id( $variation . '--' )"
             },
             "wp_create_thumbnail": {
-                "deprecated": "3.5.0",
-                "replacement": "image_resize()"
+                "deprecated": "3.5.0"
+            },
+            "wp_dashboard_incoming_links": {
+                "deprecated": "3.8.0"
+            },
+            "wp_dashboard_incoming_links_control": {
+                "deprecated": "3.8.0"
+            },
+            "wp_dashboard_incoming_links_output": {
+                "deprecated": "3.8.0"
+            },
+            "wp_dashboard_plugins": {
+                "deprecated": "3.8.0"
             },
             "wp_dashboard_plugins_output": {
                 "deprecated": "4.8.0"
             },
+            "wp_dashboard_primary_control": {
+                "deprecated": "3.8.0"
+            },
             "wp_dashboard_quick_press_output": {
-                "deprecated": "3.2.0",
-                "replacement": "wp_dashboard_quick_press()"
+                "deprecated": "3.2.0"
+            },
+            "wp_dashboard_recent_comments_control": {
+                "deprecated": "3.8.0"
+            },
+            "wp_dashboard_secondary": {
+                "deprecated": "3.8.0"
+            },
+            "wp_dashboard_secondary_control": {
+                "deprecated": "3.8.0"
+            },
+            "wp_dashboard_secondary_output": {
+                "deprecated": "3.8.0"
             },
             "wp_dropdown_cats": {
-                "deprecated": "3.0.0",
-                "replacement": "wp_dropdown_categories()"
+                "deprecated": "3.0.0"
             },
             "wp_embed_handler_googlevideo": {
                 "deprecated": "4.6.0"
             },
             "wp_enqueue_global_styles_custom_css": {
                 "deprecated": "6.7.0",
-                "replacement": "wp_enqueue_global_styles"
+                "replacement": "'wp_enqueue_global_styles'"
             },
             "wp_explain_nonce": {
-                "deprecated": "3.4.1",
-                "replacement": "wp_nonce_ays()"
+                "deprecated": "3.4.1"
+            },
+            "wp_favicon_request": {
+                "deprecated": "5.4.0"
             },
             "wp_fullscreen_html": {
                 "deprecated": "4.3.0"
@@ -1195,66 +1069,53 @@
                 "deprecated": "6.3.0"
             },
             "wp_get_duotone_filter_svg": {
-                "deprecated": "6.3.0",
-                "replacement": "WP_Duotone::get_filter_svg_from_preset()"
+                "deprecated": "6.3.0"
             },
             "wp_get_global_styles_custom_css": {
                 "deprecated": "6.7.0",
-                "replacement": "wp_get_global_stylesheet"
+                "replacement": "'wp_get_global_stylesheet'"
             },
             "wp_get_global_styles_svg_filters": {
                 "deprecated": "6.3.0"
             },
             "wp_get_http": {
-                "deprecated": "4.4.0",
-                "replacement": "WP_Http"
+                "deprecated": "4.4.0"
             },
             "wp_get_links": {
-                "deprecated": "2.1.0",
-                "replacement": "wp_list_bookmarks()"
+                "deprecated": "2.1.0"
             },
             "wp_get_linksbyname": {
-                "deprecated": "2.1.0",
-                "replacement": "wp_list_bookmarks()"
+                "deprecated": "2.1.0"
             },
             "wp_get_loading_attr_default": {
-                "deprecated": "6.3.0",
-                "replacement": "wp_get_loading_optimization_attributes()"
+                "deprecated": "6.3.0"
             },
             "wp_get_network": {
-                "deprecated": "4.7.0",
-                "replacement": "get_network()"
+                "deprecated": "4.7.0"
             },
             "wp_get_post_cats": {
-                "deprecated": "2.1.0",
-                "replacement": "wp_get_post_categories()"
+                "deprecated": "2.1.0"
             },
             "wp_get_single_post": {
-                "deprecated": "3.5.0",
-                "replacement": "get_post()"
+                "deprecated": "3.5.0"
             },
             "wp_get_sites": {
-                "deprecated": "4.6.0",
-                "replacement": "get_sites()"
+                "deprecated": "4.6.0"
             },
             "wp_get_user_request_data": {
-                "deprecated": "5.4.0",
-                "replacement": "wp_get_user_request()"
+                "deprecated": "5.4.0"
             },
             "wp_global_styles_render_svg_filters": {
                 "deprecated": "6.3.0"
             },
             "wp_htmledit_pre": {
-                "deprecated": "4.3.0",
-                "replacement": "format_for_editor()"
+                "deprecated": "4.3.0"
             },
             "wp_img_tag_add_decoding_attr": {
-                "deprecated": "6.4.0",
-                "replacement": "wp_img_tag_add_loading_optimization_attrs()"
+                "deprecated": "6.4.0"
             },
             "wp_img_tag_add_loading_attr": {
-                "deprecated": "6.3.0",
-                "replacement": "wp_img_tag_add_loading_optimization_attrs()"
+                "deprecated": "6.3.0"
             },
             "wp_init_targeted_link_rel_filters": {
                 "deprecated": "6.7.0"
@@ -1266,110 +1127,100 @@
                 "deprecated": "4.7.0"
             },
             "wp_list_cats": {
-                "deprecated": "2.1.0",
-                "replacement": "wp_list_categories()"
+                "deprecated": "2.1.0"
             },
             "wp_load_image": {
-                "deprecated": "3.5.0",
-                "replacement": "wp_get_image_editor()"
+                "deprecated": "3.5.0"
             },
             "wp_login": {
-                "deprecated": "2.5.0",
-                "replacement": "wp_signon()"
+                "deprecated": "2.5.0"
             },
             "wp_make_content_images_responsive": {
-                "deprecated": "5.5.0",
-                "replacement": "wp_filter_content_tags()"
+                "deprecated": "5.5.0"
             },
             "wp_nav_menu_locations_meta_box": {
                 "deprecated": "3.6.0"
             },
             "wp_no_robots": {
-                "deprecated": "5.7.0",
-                "replacement": "wp_robots_no_robots()"
+                "deprecated": "5.7.0"
+            },
+            "wp_oembed_add_host_js": {
+                "deprecated": "5.9.0",
+                "replacement": "wp_maybe_enqueue_oembed_host_js()"
             },
             "wp_preload_dialogs": {
-                "deprecated": "3.3.0",
-                "replacement": "wp_editor()"
+                "deprecated": "3.3.0"
             },
             "wp_print_auto_sizes_contain_css_fix": {
-                "deprecated": "6.9.0",
-                "replacement": "wp_enqueue_img_auto_sizes_contain_css_fix"
+                "deprecated": "6.9.0"
             },
             "wp_print_editor_js": {
-                "deprecated": "3.3.0",
-                "replacement": "wp_editor()"
+                "deprecated": "3.3.0"
             },
             "wp_queue_comments_for_comment_meta_lazyload": {
-                "deprecated": "6.3.0",
-                "replacement": "wp_lazyload_comment_meta()"
+                "deprecated": "6.3.0"
             },
             "wp_quicktags": {
-                "deprecated": "3.3.0",
-                "replacement": "wp_editor()"
+                "deprecated": "3.3.0"
             },
             "wp_register_duotone_support": {
-                "deprecated": "6.3.0",
-                "replacement": "WP_Duotone::register_duotone_support()"
+                "deprecated": "6.3.0"
+            },
+            "wp_rel_nofollow_callback": {
+                "deprecated": "5.3.0"
             },
             "wp_remove_targeted_link_rel_filters": {
                 "deprecated": "6.7.0"
             },
             "wp_render_duotone_filter_preset": {
-                "deprecated": "5.9.1",
-                "replacement": "wp_get_duotone_filter_property()"
+                "deprecated": "5.9.1"
             },
             "wp_render_duotone_support": {
-                "deprecated": "6.3.0",
-                "replacement": "WP_Duotone::render_duotone_support()"
+                "deprecated": "6.3.0"
             },
             "wp_render_elements_support": {
                 "deprecated": "6.6.0",
-                "replacement": "wp_render_elements_class_name"
+                "replacement": "render_block_data"
             },
             "wp_richedit_pre": {
-                "deprecated": "4.3.0",
-                "replacement": "format_for_editor()"
+                "deprecated": "4.3.0"
             },
             "wp_sanitize_script_attributes": {
-                "deprecated": "7.0.0",
-                "replacement": "wp_get_script_tag() or wp_get_inline_script_tag()"
+                "deprecated": "7.0.0"
             },
             "wp_sensitive_page_meta": {
-                "deprecated": "5.7.0",
-                "replacement": "wp_robots_sensitive_page()"
+                "deprecated": "5.7.0"
+            },
+            "wp_set_background_image": {
+                "deprecated": "3.5.0"
             },
             "wp_set_post_cats": {
-                "deprecated": "2.1.0",
-                "replacement": "wp_set_post_categories()"
+                "deprecated": "2.1.0"
             },
             "wp_setcookie": {
-                "deprecated": "2.5.0",
-                "replacement": "wp_set_auth_cookie()"
+                "deprecated": "2.5.0"
             },
             "wp_shrink_dimensions": {
-                "deprecated": "3.0.0",
-                "replacement": "wp_constrain_dimensions()"
+                "deprecated": "3.0.0"
             },
             "wp_simplepie_autoload": {
                 "deprecated": "6.7.0",
                 "replacement": "SimplePie_Autoloader"
             },
             "wp_skip_border_serialization": {
-                "deprecated": "6.0.0",
-                "replacement": "wp_should_skip_block_supports_serialization()"
+                "deprecated": "6.0.0"
             },
             "wp_skip_dimensions_serialization": {
-                "deprecated": "6.0.0",
-                "replacement": "wp_should_skip_block_supports_serialization()"
+                "deprecated": "6.0.0"
             },
             "wp_skip_spacing_serialization": {
-                "deprecated": "6.0.0",
-                "replacement": "wp_should_skip_block_supports_serialization()"
+                "deprecated": "6.0.0"
+            },
+            "wp_slash_strings_only": {
+                "deprecated": "5.6.0"
             },
             "wp_specialchars": {
-                "deprecated": "2.8.0",
-                "replacement": "esc_html()"
+                "deprecated": "2.8.0"
             },
             "wp_targeted_link_rel": {
                 "deprecated": "6.7.0"
@@ -1381,8 +1232,7 @@
                 "deprecated": "3.2.0"
             },
             "wp_tiny_mce": {
-                "deprecated": "3.3.0",
-                "replacement": "wp_editor()"
+                "deprecated": "3.3.0"
             },
             "wp_tinycolor_bound01": {
                 "deprecated": "6.3.0"
@@ -1400,51 +1250,47 @@
                 "deprecated": "6.3.0"
             },
             "wp_typography_get_css_variable_inline_style": {
-                "deprecated": "6.1.0",
-                "replacement": "wp_style_engine_get_styles()"
+                "deprecated": "6.1.0"
             },
             "wp_unregister_GLOBALS": {
                 "deprecated": "5.5.0"
             },
             "wp_update_core": {
-                "deprecated": "3.7.0",
-                "replacement": "new Core_Upgrader();"
+                "deprecated": "3.7.0"
             },
             "wp_update_https_detection_errors": {
-                "deprecated": "6.4.0"
+                "deprecated": "6.4.0",
+                "replacement": "wp_update_https_detection_errors()"
             },
             "wp_update_plugin": {
-                "deprecated": "3.7.0",
-                "replacement": "new Plugin_Upgrader();"
+                "deprecated": "3.7.0"
             },
             "wp_update_theme": {
-                "deprecated": "3.7.0",
-                "replacement": "new Theme_Upgrader();"
+                "deprecated": "3.7.0"
             },
             "wpmu_admin_do_redirect": {
-                "deprecated": "3.3.0",
-                "replacement": "wp_redirect()"
+                "deprecated": "3.3.0"
             },
             "wpmu_admin_redirect_add_updated_param": {
-                "deprecated": "3.3.0",
-                "replacement": "add_query_arg()"
+                "deprecated": "3.3.0"
             },
             "wpmu_checkAvailableSpace": {
-                "deprecated": "3.0.0",
-                "replacement": "is_upload_space_available()"
+                "deprecated": "3.0.0"
             },
             "wpmu_current_site": {
                 "deprecated": "3.9.0"
             },
             "wpmu_get_blog_allowedthemes": {
-                "deprecated": "3.4.0",
-                "replacement": "WP_Theme::get_allowed_on_site()"
+                "deprecated": "3.4.0"
             },
             "wpmu_menu": {
                 "deprecated": "3.0.0"
             }
         },
         "method": {
+            "Gettext_Translations::parenthesize_plural_exression": {
+                "deprecated": "6.5.0"
+            },
             "POMO_CachedFileReader::POMO_CachedFileReader": {
                 "deprecated": "5.4.0"
             },
@@ -1460,63 +1306,58 @@
             "POMO_StringReader::POMO_StringReader": {
                 "deprecated": "5.4.0"
             },
+            "Requests::autoloader": {
+                "deprecated": "6.2.0",
+                "replacement": "WpOrg\\Requests\\Autoload::load()"
+            },
+            "Requests::register_autoloader": {
+                "deprecated": "6.2.0",
+                "replacement": "WpOrg\\Requests\\Autoload"
+            },
             "Services_JSON::Services_JSON": {
                 "deprecated": "5.3.0"
             },
             "Services_JSON::__construct": {
-                "deprecated": "5.3.0",
-                "replacement": "The PHP native JSON extension"
+                "deprecated": "5.3.0"
             },
             "Services_JSON::_encode": {
-                "deprecated": "5.3.0",
-                "replacement": "The PHP native JSON extension"
+                "deprecated": "5.3.0"
             },
             "Services_JSON::decode": {
-                "deprecated": "5.3.0",
-                "replacement": "The PHP native JSON extension"
+                "deprecated": "5.3.0"
             },
             "Services_JSON::encode": {
-                "deprecated": "5.3.0",
-                "replacement": "The PHP native JSON extension"
+                "deprecated": "5.3.0"
             },
             "Services_JSON::encodeUnsafe": {
-                "deprecated": "5.3.0",
-                "replacement": "The PHP native JSON extension"
+                "deprecated": "5.3.0"
             },
             "Services_JSON::isError": {
-                "deprecated": "5.3.0",
-                "replacement": "The PHP native JSON extension"
+                "deprecated": "5.3.0"
             },
             "Services_JSON::name_value": {
-                "deprecated": "5.3.0",
-                "replacement": "The PHP native JSON extension"
+                "deprecated": "5.3.0"
             },
             "Services_JSON::reduce_string": {
-                "deprecated": "5.3.0",
-                "replacement": "The PHP native JSON extension"
+                "deprecated": "5.3.0"
             },
             "Services_JSON::strlen8": {
-                "deprecated": "5.3.0",
-                "replacement": "The PHP native JSON extension"
+                "deprecated": "5.3.0"
             },
             "Services_JSON::substr8": {
-                "deprecated": "5.3.0",
-                "replacement": "The PHP native JSON extension"
+                "deprecated": "5.3.0"
             },
             "Services_JSON::utf162utf8": {
-                "deprecated": "5.3.0",
-                "replacement": "The PHP native JSON extension"
+                "deprecated": "5.3.0"
             },
             "Services_JSON::utf82utf16": {
-                "deprecated": "5.3.0",
-                "replacement": "The PHP native JSON extension"
+                "deprecated": "5.3.0"
             },
             "Services_JSON_Error::Services_JSON_Error": {
                 "deprecated": "5.3.0"
             },
             "Services_JSON_Error::__construct": {
-                "deprecated": "5.3.0",
-                "replacement": "The PHP native JSON extension"
+                "deprecated": "5.3.0"
             },
             "Translation_Entry::Translation_Entry": {
                 "deprecated": "5.4.0"
@@ -1528,6 +1369,9 @@
                 "deprecated": "4.9.0"
             },
             "WP_Customize_Image_Control::add_tab": {
+                "deprecated": "4.1.0"
+            },
+            "WP_Customize_Image_Control::prepare_control": {
                 "deprecated": "4.1.0"
             },
             "WP_Customize_Image_Control::print_tab_image": {
@@ -1543,12 +1387,10 @@
                 "deprecated": "4.7.0"
             },
             "WP_Customize_Nav_Menu_Setting::_sort_menus_by_orderby": {
-                "deprecated": "4.7.0",
-                "replacement": "wp_list_sort"
+                "deprecated": "4.7.0"
             },
             "WP_Customize_Nav_Menus_Panel::wp_nav_menu_manage_columns": {
-                "deprecated": "4.5.0",
-                "replacement": "wp_nav_menu_manage_columns"
+                "deprecated": "4.5.0"
             },
             "WP_Customize_New_Menu_Control::__construct": {
                 "deprecated": "4.9.0"
@@ -1563,8 +1405,7 @@
                 "deprecated": "4.9.0"
             },
             "WP_Debug_Data::get_sizes": {
-                "deprecated": "5.6.0",
-                "replacement": "WP_REST_Site_Health_Controller::get_directory_sizes()"
+                "deprecated": "5.6.0"
             },
             "WP_Duotone::get_filter_css_property_value_from_preset": {
                 "deprecated": "6.3.0"
@@ -1576,97 +1417,92 @@
                 "deprecated": "6.3.0"
             },
             "WP_Filesystem_Base::find_base_dir": {
-                "deprecated": "2.7.0",
-                "replacement": "WP_Filesystem_Base::abspath() or WP_Filesystem_Base::wp_*_dir()"
+                "deprecated": "2.7.0"
             },
             "WP_Filesystem_Base::get_base_dir": {
-                "deprecated": "2.7.0",
-                "replacement": "WP_Filesystem_Base::abspath() or WP_Filesystem_Base::wp_*_dir()"
+                "deprecated": "2.7.0"
+            },
+            "WP_Http::_dispatch_request": {
+                "deprecated": "5.1.0"
+            },
+            "WP_Http::_get_first_available_transport": {
+                "deprecated": "6.4.0"
             },
             "WP_Http::parse_url": {
-                "deprecated": "4.4.0",
-                "replacement": "wp_parse_url()"
+                "deprecated": "4.4.0"
             },
             "WP_Image_Editor_Imagick::set_imagick_time_limit": {
                 "deprecated": "6.3.0"
             },
             "WP_Interactivity_API::print_client_interactivity_data": {
-                "deprecated": "6.7.0"
+                "deprecated": "6.7.0",
+                "replacement": "\"script_module_data_{$module_id"
             },
             "WP_Interactivity_API::register_script_modules": {
                 "deprecated": "6.7.0",
-                "replacement": "wp_default_script_modules"
+                "replacement": "wp_default_script_modules()"
             },
             "WP_Metadata_Lazyloader::lazyload_comment_meta": {
-                "deprecated": "6.3.0",
-                "replacement": "WP_Metadata_Lazyloader::lazyload_meta_callback"
+                "deprecated": "6.3.0"
             },
             "WP_Metadata_Lazyloader::lazyload_term_meta": {
-                "deprecated": "6.3.0",
-                "replacement": "WP_Metadata_Lazyloader::lazyload_meta_callback"
+                "deprecated": "6.3.0"
             },
             "WP_Object_Cache::reset": {
-                "deprecated": "3.5.0",
-                "replacement": "WP_Object_Cache::switch_to_blog()"
+                "deprecated": "3.5.0"
             },
             "WP_REST_Application_Passwords_Controller::do_permissions_check": {
-                "deprecated": "5.7.0"
+                "deprecated": "5.7.0",
+                "replacement": "edit_user"
             },
             "WP_REST_Meta_Fields::register_field": {
                 "deprecated": "5.6.0"
             },
             "WP_REST_Post_Search_Handler::detect_rest_item_route": {
-                "deprecated": "5.5.0",
-                "replacement": "rest_get_route_for_post()"
+                "deprecated": "5.5.0"
             },
             "WP_REST_Settings_Controller::set_additional_properties_to_false": {
                 "deprecated": "6.1.0",
                 "replacement": "rest_default_additional_properties_to_false()"
             },
             "WP_Roles::_init": {
-                "deprecated": "4.9.0",
-                "replacement": "WP_Roles::for_site()"
+                "deprecated": "4.9.0"
             },
             "WP_Roles::reinit": {
-                "deprecated": "4.7.0",
-                "replacement": "WP_Roles::for_site()"
+                "deprecated": "4.7.0"
             },
             "WP_Scripts::print_scripts_l10n": {
-                "deprecated": "3.3.0",
-                "replacement": "WP_Scripts::print_extra_script()"
+                "deprecated": "3.3.0"
             },
             "WP_Site_Icon::create_attachment_object": {
-                "deprecated": "6.5.0",
-                "replacement": "wp_copy_parent_attachment_properties()"
+                "deprecated": "6.5.0"
             },
             "WP_Sitemaps::redirect_sitemapxml": {
-                "deprecated": "6.7.0"
+                "deprecated": "6.7.0",
+                "replacement": "WP_Rewrite::rewrite_rules()"
             },
             "WP_Theme_JSON::get_custom_css": {
                 "deprecated": "6.7.0",
-                "replacement": "get_stylesheet"
+                "replacement": "'get_stylesheet'"
             },
             "WP_Theme_JSON::set_spacing_sizes": {
                 "deprecated": "6.6.0"
             },
             "WP_Theme_JSON::should_override_preset": {
                 "deprecated": "6.0.0",
-                "replacement": "get_metadata_boolean"
+                "replacement": "'get_metadata_boolean'"
             },
             "WP_Theme_JSON_Resolver::get_fields_to_translate": {
                 "deprecated": "5.9.0"
             },
             "WP_Theme_JSON_Resolver::theme_has_support": {
-                "deprecated": "6.2.0",
-                "replacement": "wp_theme_has_theme_json()"
+                "deprecated": "6.2.0"
             },
             "WP_User::_init_caps": {
-                "deprecated": "4.9.0",
-                "replacement": "WP_User::for_site()"
+                "deprecated": "4.9.0"
             },
             "WP_User::for_blog": {
-                "deprecated": "4.9.0",
-                "replacement": "WP_User::for_site()"
+                "deprecated": "4.9.0"
             },
             "WP_User_Search::WP_User_Search": {
                 "deprecated": "3.1.0"
@@ -1677,31 +1513,50 @@
             "WP_Widget_Factory::WP_Widget_Factory": {
                 "deprecated": "4.3.0"
             },
+            "wp_xmlrpc_server::login_pass_ok": {
+                "deprecated": "2.8.0"
+            },
             "wpdb::_weak_escape": {
-                "deprecated": "3.6.0",
-                "replacement": "wpdb::prepare() or esc_sql()"
+                "deprecated": "3.6.0"
             },
             "wpdb::escape": {
-                "deprecated": "3.6.0",
-                "replacement": "wpdb::prepare() or esc_sql()"
+                "deprecated": "3.6.0"
             },
             "wpdb::supports_collation": {
-                "deprecated": "3.5.0",
-                "replacement": "wpdb::has_cap( 'collation' )"
+                "deprecated": "3.5.0"
             }
         },
         "class": {
+            "Requests": {
+                "deprecated": "6.2.0",
+                "replacement": "WpOrg\\Requests\\Requests"
+            },
+            "WP_Customize_New_Menu_Control": {
+                "deprecated": "4.9.0"
+            },
+            "WP_Customize_New_Menu_Section": {
+                "deprecated": "4.9.0"
+            },
+            "WP_HTTP_Fsockopen": {
+                "deprecated": "3.7.0"
+            },
+            "WP_Http_Curl": {
+                "deprecated": "6.4.0"
+            },
+            "WP_Http_Streams": {
+                "deprecated": "6.4.0"
+            },
             "WP_Privacy_Data_Export_Requests_Table": {
-                "deprecated": "5.3.0",
-                "replacement": "WP_Privacy_Data_Export_Requests_List_Table"
+                "deprecated": "5.3.0"
             },
             "WP_Privacy_Data_Removal_Requests_Table": {
-                "deprecated": "5.3.0",
-                "replacement": "WP_Privacy_Data_Removal_Requests_List_Table"
+                "deprecated": "5.3.0"
             },
             "WP_User_Search": {
-                "deprecated": "3.1.0",
-                "replacement": "WP_User_Query"
+                "deprecated": "3.1.0"
+            },
+            "wp_atom_server": {
+                "deprecated": "3.5.0"
             }
         },
         "file": {

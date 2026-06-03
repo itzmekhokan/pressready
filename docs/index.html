@@ -217,11 +217,58 @@ vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--fail-on=fatal</span> 
 vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--format=json</span> --path=.
 
 <span class="c"># GitHub PR inline annotations.</span>
-vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--format=github</span> --path=.</pre>
+vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--format=github</span> --path=.
+
+<span class="c"># SARIF for code-scanning dashboards (GitHub Advanced Security).</span>
+vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--format=sarif</span> --path=. &gt; pressready.sarif
+
+<span class="c"># A PHP upgrade path — everything that breaks across 8.1 → 8.4.</span>
+vendor/bin/pressready <span class="k">--php=8.1-8.4</span> --path=.
+
+<span class="c"># Hide the deprecation tail; show only fatals and risky changes.</span>
+vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--ignore-on=deprecated</span> --path=.</pre>
     <p style="margin-top:16px;color:var(--muted);font-size:14.5px">
-      <code>--format</code>: <code>grouped</code> (default) · <code>summary</code> · <code>json</code> · <code>github</code><br>
-      <code>--fail-on</code>: <code>fatal</code> · <code>risky</code> · <code>deprecated</code>
+      <code>--format</code>: <code>grouped</code> (default) · <code>table</code> · <code>summary</code> · <code>json</code> · <code>sarif</code> · <code>github</code><br>
+      <code>--fail-on</code>: <code>fatal</code> · <code>risky</code> · <code>deprecated</code> &nbsp;·&nbsp; <code>--ignore-on</code>: hide findings at/below a level (the inverse)
     </p>
+  </div>
+</section>
+
+<section id="scale" style="background:#fff;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <div class="wrap">
+    <h2>Large stacks &amp; performance</h2>
+    <p class="lede">Built to scan a full enterprise <code>wp-content</code> — hundreds of plugins, tens of thousands of files — without crawling.</p>
+    <div class="two-col">
+      <div>
+        <p style="font-weight:600;margin:0 0 8px;font-size:15px">Speed</p>
+        <pre><span class="c"># Parallel is ON by default (auto-detects CPU cores).</span>
+vendor/bin/pressready --php=8.4 --wp=6.9 \
+  --path=wp-content <span class="k">--parallel=8</span>
+
+<span class="c"># Cache results — re-scans only reprocess changed files.</span>
+vendor/bin/pressready --php=8.4 --wp=6.9 \
+  --path=wp-content <span class="k">--cache</span></pre>
+      </div>
+      <div>
+        <p style="font-weight:600;margin:0 0 8px;font-size:15px">Focus &amp; signal</p>
+        <pre><span class="c"># The 10 worst components, or just one.</span>
+vendor/bin/pressready --php=8.4 --wp=6.9 \
+  --path=wp-content <span class="k">--top=10</span>
+vendor/bin/pressready --php=8.4 --wp=6.9 \
+  --path=wp-content <span class="k">--only=woocommerce</span></pre>
+      </div>
+    </div>
+    <p style="margin-top:16px;color:var(--muted);font-size:14.5px">Un-fixable / generated code is skipped by default (<code>vendor</code>, <code>node_modules</code>, <code>build</code>, <code>dist</code>, <code>*.min.php</code>, <code>tests</code>). Add your own with <code>--ignore=&lt;patterns&gt;</code> or turn the built-ins off with <code>--no-default-ignore</code>. Repeated identical findings collapse into one line with an <code>(×N)</code> count.</p>
+
+    <h3 style="font-size:18px;margin:28px 0 8px">Config file</h3>
+    <p style="color:var(--muted);font-size:14.5px;margin:0 0 10px">Commit shared defaults to a <code>.pressready.json</code> in your project root — CLI flags always win.</p>
+    <pre>{
+  <span class="k">"php"</span>: "8.4",
+  <span class="k">"wp"</span>: "6.9",
+  <span class="k">"fail-on"</span>: "fatal",
+  <span class="k">"ignore"</span>: ["*/cache/*", "*/languages/*"],
+  <span class="k">"top"</span>: 20
+}</pre>
   </div>
 </section>
 
@@ -267,6 +314,12 @@ wp pressready scan --php=8.4 <span class="k">--format=csv</span></pre>
         <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--since=&lt;ver&gt;</code></td><td style="color:var(--muted)">With <code>--wp</code>, only what newly deprecates upgrading from this version.</td></tr>
         <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--format=&lt;fmt&gt;</code></td><td style="color:var(--muted)"><code>table</code> (default) · <code>summary</code> · <code>json</code> · <code>csv</code> · <code>yaml</code> · <code>count</code></td></tr>
         <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--fail-on=&lt;lvl&gt;</code></td><td style="color:var(--muted)">Exit non-zero when findings at/above this level exist: <code>fatal</code> · <code>risky</code> · <code>deprecated</code></td></tr>
+        <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--ignore-on=&lt;lvl&gt;</code></td><td style="color:var(--muted)">Hide findings at/below this level (the inverse of <code>--fail-on</code>).</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--parallel=&lt;n&gt;</code></td><td style="color:var(--muted)">phpcs worker processes. Default: auto (CPU cores); <code>1</code> to disable.</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--cache[=&lt;file&gt;]</code></td><td style="color:var(--muted)">Cache results so re-scans only reprocess changed files.</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--ignore=&lt;patterns&gt;</code></td><td style="color:var(--muted)">Extra comma-separated path patterns to skip (<code>--no-default-ignore</code> drops the built-ins).</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--only / --top</code></td><td style="color:var(--muted)">Focus the report: one component by name, or the N worst.</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--config=&lt;file&gt;</code></td><td style="color:var(--muted)">Load defaults from a JSON config file (CLI flags still win).</td></tr>
       </table>
     </div>
   </div>
@@ -324,7 +377,8 @@ get_postdata( 1 ); <span class="k">// phpcs:ignore Pressready.WordPress.Deprecat
       <tr><td>3</td><td><code>--php=</code> via bundled PHPCompatibility; unified severity model (fatal / risky / php / wp)</td><td><span class="pill done">done</span></td></tr>
       <tr><td>4</td><td>Per-component attribution, baseline, <code>--format=github</code>, inline suppression</td><td><span class="pill done">done</span></td></tr>
       <tr><td>5</td><td><code>wp pressready scan</code> WP-CLI command (before_wp_load, all formats, <code>--fail-on</code>)</td><td><span class="pill done">done</span></td></tr>
-      <tr><td>6+</td><td>DataViews admin report; fix-hint links; Update Safety Net (sequel); WP.org distribution</td><td><span class="pill plan">planned</span></td></tr>
+      <tr><td>6</td><td>Enterprise scale: parallel scanning, result cache, path ignores, duplicate collapsing, <code>--only</code>/<code>--top</code>, <code>.pressready.json</code> config, SARIF output, PHP version ranges, docblock-driven dataset coverage</td><td><span class="pill done">done</span></td></tr>
+      <tr><td>7+</td><td>DataViews admin report; fix-hint links; Update Safety Net (sequel); WP.org distribution</td><td><span class="pill plan">planned</span></td></tr>
     </table>
   </div>
 </section>

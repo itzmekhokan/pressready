@@ -92,12 +92,65 @@ vendor/bin/pressready --php=8.4 --wp=6.9 --format=json --path=.
 
 # GitHub PR inline annotations.
 vendor/bin/pressready --php=8.4 --wp=6.9 --format=github --path=.
+
+# SARIF for code-scanning dashboards (GitHub Advanced Security, etc.).
+vendor/bin/pressready --php=8.4 --wp=6.9 --format=sarif --path=. > pressready.sarif
+
+# A PHP upgrade path (everything that breaks across 8.1 → 8.4).
+vendor/bin/pressready --php=8.1-8.4 --path=.
 ```
 
-`--format`: `grouped` (default) · `summary` · `json` · `github`
+`--format`: `grouped` (default) · `table` · `summary` · `json` · `sarif` · `github`
 `--fail-on`: `fatal` · `risky` · `deprecated`
+`--ignore-on`: `fatal` · `risky` · `deprecated` — hide findings at/below this level (the inverse of `--fail-on`)
 
-On a large `wp-content`, the grouped/summary output leads with a **fix-first block** — every `fatal` then every `risky` finding with a clickable `path:line` — so the issues that actually block an upgrade aren't buried under the deprecation tail. In an interactive terminal you also get a live progress meter while it scans (suppressed automatically when piped or in CI).
+On a large `wp-content`, the grouped/summary output leads with a **fix-first block** — every `fatal` then every `risky` finding with a clickable `path:line` — so the issues that actually block an upgrade aren't buried under the deprecation tail. Repeated identical findings collapse into one line with an `(×N)` count (disable with `--no-collapse`). In an interactive terminal you also get a live progress meter while it scans (suppressed automatically when piped or in CI), plus colour-coded severities.
+
+---
+
+## Large stacks & performance
+
+Built to scan a full enterprise `wp-content` (hundreds of plugins) without crawling:
+
+```bash
+# Parallel is ON by default (auto-detects CPU cores); set it explicitly or disable.
+vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content --parallel=8
+vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content --parallel=1   # serial
+
+# Cache results so re-scans only reprocess changed files (great for CI / iteration).
+vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content --cache
+
+# Focus the report on a big stack.
+vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content --top=10        # 10 worst components
+vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content --only=woocommerce
+```
+
+**Path ignores.** Un-fixable / generated code is skipped by default: `*/vendor/*`, `*/node_modules/*`, `*/build/*`, `*/dist/*`, `*.min.php`, `*/tests/*`. Add your own with `--ignore=<patterns>` (comma-separated), or turn the built-ins off with `--no-default-ignore`.
+
+```bash
+vendor/bin/pressready --php=8.4 --path=wp-content --ignore='*/cache/*,*/languages/*'
+```
+
+---
+
+## Config file
+
+Commit shared defaults to a `.pressready.json` in your project root instead of re-typing flags. CLI flags always override the file.
+
+```json
+{
+    "php": "8.4",
+    "wp": "6.9",
+    "fail-on": "fatal",
+    "ignore": ["*/cache/*", "*/languages/*"],
+    "top": 20
+}
+```
+
+```bash
+vendor/bin/pressready --path=wp-content              # picks up .pressready.json
+vendor/bin/pressready --config=ci/pressready.json    # or point at a specific file
+```
 
 ---
 
@@ -142,6 +195,8 @@ wp pressready scan --php=8.4 --wp=6.9 --fail-on=fatal
 `--format`: `table` (default) · `summary` · `json` · `csv` · `yaml` · `count`
 `--fail-on`: `fatal` · `risky` · `deprecated`
 
+The `--ignore-on`, `--parallel`, `--cache`, `--ignore`, `--only`, `--top` and `--config` flags work the same as the standalone CLI.
+
 ---
 
 ## Baseline (legacy sites)
@@ -180,7 +235,8 @@ get_postdata( 1 );                      // phpcs:ignore Pressready.WordPress.Dep
 | 3 | `--php=` via bundled PHPCompatibility; unified severity model | ✅ done |
 | 4 | Per-component attribution, baseline, `--format=github`, inline suppression | ✅ done |
 | 5 | `wp pressready scan` WP-CLI command | ✅ done |
-| 6+ | DataViews admin report; fix-hint links; WP.org distribution | planned |
+| 6 | Enterprise scale: parallel, result cache, path ignores, duplicate collapsing, `--only`/`--top`, `.pressready.json` config, SARIF output, PHP version ranges, docblock dataset coverage | ✅ done |
+| 7+ | DataViews admin report; fix-hint links; WP.org distribution | planned |
 
 ---
 

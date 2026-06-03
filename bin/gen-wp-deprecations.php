@@ -68,7 +68,7 @@ function main( array $argv ): void {
 		'hook'     => array(),
 		'argument' => array(),
 	);
-	$stats = array( 'files' => 0, 'calls' => 0, 'unresolved' => 0 );
+	$stats = array( 'files' => 0, 'calls' => 0, 'unresolved' => 0, 'docblock' => 0 );
 
 	foreach ( php_files( $src ) as $file ) {
 		++$stats['files'];
@@ -98,12 +98,13 @@ function main( array $argv ): void {
 	fwrite(
 		STDERR,
 		sprintf(
-			"Wrote %s\n  wp_version: %s\n  scanned %d files, %d deprecation calls (%d unresolved)\n  %s\n",
+			"Wrote %s\n  wp_version: %s\n  scanned %d files, %d deprecation calls (%d unresolved), %d docblock tags\n  %s\n",
 			$out,
 			$wp_version,
 			$stats['files'],
 			$stats['calls'],
 			$stats['unresolved'],
+			$stats['docblock'],
 			implode( ', ', array_map(
 				static fn( $k, $v ) => "$k: $v",
 				array_keys( $dataset['counts'] ),
@@ -216,9 +217,18 @@ function scan_file( string $file, string $src, array &$buckets, array &$stats ):
 	$func_stack   = array(); // [ [name, depth], ... ]
 	$pending_cls  = null;  // class name awaiting its opening brace.
 	$pending_fn   = null;  // function name awaiting its `{` or `;`.
+	$pending_doc  = null;  // [version, replacement] from a `@deprecated` docblock awaiting its declaration.
 
 	for ( $i = 0; $i < $count; $i++ ) {
 		list( $id, $text ) = $norm[ $i ];
+
+		// A `@deprecated <version>` docblock attaches to the next class/function/
+		// method declaration. Core deprecates many symbols this way (no runtime
+		// `_deprecated_*()` call), so this is the only signal for them.
+		if ( T_DOC_COMMENT === $id ) {
+			$pending_doc = parse_deprecated_doc( $text );
+			continue;
+		}
 
 		// --- Scope tracking ----------------------------------------------
 		if ( T_CLASS === $id || T_INTERFACE === $id || T_TRAIT === $id ) {
@@ -226,12 +236,25 @@ function scan_file( string $file, string $src, array &$buckets, array &$stats ):
 			$name = next_string( $norm, $i, $count );
 			if ( null !== $name && ! preg_match_prev_is_double_colon( $norm, $i ) ) {
 				$pending_cls = $name;
+				if ( null !== $pending_doc ) {
+					record_docblock( 'class', $name, $pending_doc, $buckets, $stats );
+				}
 			}
+			$pending_doc = null;
 			continue;
 		}
 		if ( T_FUNCTION === $id ) {
 			$name = next_string( $norm, $i, $count );
 			$pending_fn = $name; // null => anonymous function; still tracked for depth balance.
+			if ( null !== $pending_doc && null !== $name ) {
+				$cur_class = $class_stack ? end( $class_stack )[0] : null;
+				if ( $cur_class ) {
+					record_docblock( 'method', "$cur_class::$name", $pending_doc, $buckets, $stats );
+				} else {
+					record_docblock( 'function', $name, $pending_doc, $buckets, $stats );
+				}
+			}
+			$pending_doc = null;
 			continue;
 		}
 		if ( null === $id && '{' === $text ) {
@@ -256,9 +279,14 @@ function scan_file( string $file, string $src, array &$buckets, array &$stats ):
 			--$depth;
 			continue;
 		}
-		if ( null === $id && ';' === $text && $pending_fn !== false ) {
-			// Abstract / interface method: declared, no body.
-			$pending_fn = false;
+		if ( null === $id && ';' === $text ) {
+			// A `;` ends a property/const/use statement — a `@deprecated` docblock
+			// on one of those is not a class/function we track, so drop it here
+			// rather than let it bleed onto the next declaration.
+			$pending_doc = null;
+			if ( $pending_fn !== false ) {
+				$pending_fn = false; // Abstract / interface method: declared, no body.
+			}
 			continue;
 		}
 		// Reset a dangling pending function once we pass its signature without a brace.
@@ -369,6 +397,58 @@ function record_call( string $fn, array $args, ?string $cur_class, ?string $cur_
 		|| version_compare( $version, $buckets[ $bucket ][ $identifier ]['deprecated'], '<' ) ) {
 		$buckets[ $bucket ][ $identifier ] = $entry;
 	}
+}
+
+/**
+ * Parse a docblock for a `@deprecated <version> [text]` tag.
+ *
+ * @param string $doc Raw T_DOC_COMMENT text.
+ * @return array{version:string,replacement:?string}|null Null if no usable tag.
+ */
+function parse_deprecated_doc( string $doc ): ?array {
+	if ( ! preg_match( '/@deprecated\s+([0-9][0-9.]*)\b[ \t]*(.*)$/m', $doc, $m ) ) {
+		return null;
+	}
+	$version = normalize_version( $m[1] );
+	if ( null === $version ) {
+		return null;
+	}
+	$rest = trim( $m[2] );
+
+	// Replacement only from a clean signal — a `{@see Symbol}` tag or the first
+	// `backticked` symbol. Free-text rationale ("Use the X class instead") is too
+	// noisy to parse into a symbol, so it's dropped rather than guessed wrong.
+	$replacement = null;
+	if ( preg_match( '/\{@see\s+([^}]+)\}/', $rest, $r ) ) {
+		$replacement = trim( $r[1] );
+	} elseif ( preg_match( '/`([^`]+)`/', $rest, $r ) ) {
+		$replacement = trim( $r[1] );
+	}
+	return array( 'version' => $version, 'replacement' => $replacement );
+}
+
+/**
+ * Record a deprecation discovered via a `@deprecated` docblock (no runtime call).
+ *
+ * Uses the same first-writer / lower-version merge as record_call(), so it
+ * harmlessly overlaps entries that also have a `_deprecated_*()` call.
+ *
+ * @param string                  $bucket     'class' | 'method' | 'function'.
+ * @param string                  $identifier Symbol id (e.g. "WP_Foo" or "WP_Foo::bar").
+ * @param array{version:string,replacement:?string} $dep Parsed docblock data.
+ * @param array<string,array>     $buckets    Output buckets, by reference.
+ * @param array<string,int>       $stats      Stats, by reference.
+ */
+function record_docblock( string $bucket, string $identifier, array $dep, array &$buckets, array &$stats ): void {
+	$entry = array( 'deprecated' => $dep['version'] );
+	if ( ! empty( $dep['replacement'] ) ) {
+		$entry['replacement'] = $dep['replacement'];
+	}
+	if ( ! isset( $buckets[ $bucket ][ $identifier ] )
+		|| version_compare( $dep['version'], $buckets[ $bucket ][ $identifier ]['deprecated'], '<' ) ) {
+		$buckets[ $bucket ][ $identifier ] = $entry;
+	}
+	++$stats['docblock'];
 }
 
 /**

@@ -15,8 +15,8 @@
  *
  * Usage:
  *   pressready [--php=8.4] [--wp=6.9] [--since=6.4] [--path=.]
- *              [--format=grouped|json|summary|github] [--fail-on=fatal|risky|deprecated]
- *              [--baseline[=file]] [--generate-baseline[=file]]
+ *              [--format=grouped|table|json|summary|github] [--fail-on=fatal|risky|deprecated]
+ *              [--ignore-on=fatal|risky|deprecated] [--baseline[=file]] [--generate-baseline[=file]]
  *
  * At least one of --php or --wp is required.
  *
@@ -40,16 +40,21 @@ main( $argv );
  * @param string[] $argv CLI arguments.
  */
 function main( array $argv ): void {
-	$opts   = parse_opts( $argv );
+	$opts   = apply_config( parse_opts( $argv ) ); // CLI > .pressready.json > defaults.
 	$root   = realpath( $opts['path'] ?? getcwd() );
 	$php    = $opts['php'] ?? '';
 	$wp     = $opts['wp'] ?? '';
 	$since  = $opts['since'] ?? '';
-	$format = $opts['format'] ?? 'grouped';
-	$pkg    = dirname( __DIR__ ); // This package's root (holds Pressready/ + the dataset).
+	$format    = $opts['format'] ?? 'grouped';
+	$ignore_on = $opts['ignore-on'] ?? '';
+	$pkg       = dirname( __DIR__ ); // This package's root (holds Pressready/ + the dataset).
 
 	if ( '' === $php && '' === $wp ) {
 		fwrite( STDERR, "error: specify at least one target — --php=<ver> and/or --wp=<ver>\n" );
+		exit( 2 );
+	}
+	if ( '' !== $php && ! preg_match( '/^\d+(?:\.\d+)?(?:-\d+(?:\.\d+)?)?$/', $php ) ) {
+		fwrite( STDERR, "error: --php must be a version or range, e.g. 8.4 or 8.1-8.4\n" );
 		exit( 2 );
 	}
 	if ( false === $root ) {
@@ -82,7 +87,7 @@ function main( array $argv ): void {
 	// any pipe/redirect), so pressready renders its own spinner instead while
 	// phpcs runs in the background. Human output only (never JSON/github); auto
 	// on a TTY, and overridable with PRESSREADY_PROGRESS=1|0 for pipes/tests.
-	$human        = ( 'json' !== $format && 'github' !== $format );
+	$human        = ! in_array( $format, array( 'json', 'github', 'sarif' ), true );
 	$progress_env = getenv( 'PRESSREADY_PROGRESS' );
 	$progress     = $human && function_exists( 'proc_open' ) && (
 		'1' === $progress_env
@@ -94,9 +99,31 @@ function main( array $argv ): void {
 		'--report-json=' . $report,
 		'--extensions=php',
 	);
+
+	// Parallelism: phpcs forks workers when ext-pcntl is present. ON by default
+	// (auto = CPU cores) since enterprise stacks are large; --parallel=1 disables.
+	$parallel = resolve_parallel( $opts );
+	if ( $parallel > 1 ) {
+		$args[] = '--parallel=' . $parallel;
+	}
+
+	// Incremental cache: opt-in via --cache[=file]. Re-scans only reprocess
+	// changed files — a large-stack CI/dev win. Default cache lives in the temp dir.
+	if ( isset( $opts['cache'] ) && ! isset( $opts['no-cache'] ) ) {
+		$cache_file = ( '1' === $opts['cache'] ) ? sys_get_temp_dir() . '/pressready-cache.json' : $opts['cache'];
+		$args[]     = '--cache=' . $cache_file;
+	}
+
+	// Path ignores: sensible built-in excludes (un-fixable vendored / generated
+	// code) plus any user --ignore patterns, unless --no-default-ignore is given.
+	$ignore = build_ignore_patterns( $opts );
+	if ( '' !== $ignore ) {
+		$args[] = '--ignore=' . $ignore;
+	}
+
 	if ( '' !== $php ) {
-		// testVersion is the PHP version the site will run on; PHPCompatibility
-		// reports everything removed/deprecated by then.
+		// testVersion is the PHP version (or range) the site will run on;
+		// PHPCompatibility reports everything removed/deprecated by then.
 		$args[] = '--runtime-set';
 		$args[] = 'testVersion';
 		$args[] = $php;
@@ -156,15 +183,34 @@ function main( array $argv ): void {
 		list( $data, $suppressed ) = apply_baseline( $data, $root, $path );
 	}
 
+	// Strip findings of ignored severities before any rendering or tallying.
+	if ( '' !== $ignore_on ) {
+		$data = filter_data_ignored( $data, $ignore_on );
+	}
+
 	// GitHub Actions: emit workflow commands so findings annotate the PR inline.
 	if ( 'github' === $format ) {
 		render_github( $data );
 		exit( exit_code( tally( regroup( $data, $root ) ), $opts ) );
 	}
 
-	$grouped               = regroup( $data, $root );
-	$tally                 = tally( $grouped );
-	$tally['suppressed']   = $suppressed;
+	// SARIF 2.1.0: feed code-scanning dashboards (GitHub Advanced Security, etc.).
+	// Emitted losslessly from the flat phpcs structure (one result per finding).
+	if ( 'sarif' === $format ) {
+		render_sarif( $data, $root );
+		exit( exit_code( tally( regroup( $data, $root ) ), $opts ) );
+	}
+
+	$grouped = regroup( $data, $root );
+
+	// Component focus for large stacks: --only=<needle> narrows to matching
+	// components; --top=N keeps the N worst (the list is already fatal-sorted).
+	$total_components = count( $grouped );
+	$grouped          = filter_components( $grouped, $opts['only'] ?? '', (int) ( $opts['top'] ?? 0 ) );
+	$shown_components = count( $grouped );
+
+	$tally               = tally( $grouped );
+	$tally['suppressed'] = $suppressed;
 
 	if ( 'json' === $format ) {
 		echo json_encode(
@@ -174,7 +220,8 @@ function main( array $argv ): void {
 		exit( exit_code( $tally, $opts ) );
 	}
 
-	render( $grouped, $tally, $root, $php, $wp, $since, $format );
+	$collapse = ! isset( $opts['no-collapse'] );
+	render( $grouped, $tally, $root, $php, $wp, $since, $format, $collapse, $total_components, $shown_components );
 	exit( exit_code( $tally, $opts ) );
 }
 
@@ -306,6 +353,98 @@ function gh_escape_data( string $s ): string {
  */
 function gh_escape_prop( string $s ): string {
 	return strtr( $s, array( '%' => '%25', "\r" => '%0D', "\n" => '%0A', ',' => '%2C', ':' => '%3A' ) );
+}
+
+/**
+ * Emit a SARIF 2.1.0 report so findings flow into code-scanning dashboards
+ * (e.g. GitHub Advanced Security). One result per finding (lossless), with the
+ * sniff source as ruleId and fatal→error / everything else→warning.
+ *
+ * @param array  $data PHPCS JSON report (possibly baseline/ignore-filtered).
+ * @param string $root Scan root; result URIs are shown relative to it.
+ * @return void
+ */
+function render_sarif( array $data, string $root ): void {
+	$rules    = array();
+	$rule_idx = array();
+	$results  = array();
+
+	foreach ( $data['files'] as $file => $info ) {
+		if ( empty( $info['messages'] ) ) {
+			continue;
+		}
+		$rel = ltrim( str_replace( $root, '', $file ), '/' );
+		foreach ( $info['messages'] as $m ) {
+			$source = $m['source'] ?? 'Pressready';
+			if ( ! isset( $rule_idx[ $source ] ) ) {
+				$rule_idx[ $source ] = count( $rules );
+				$rules[]             = array(
+					'id'   => $source,
+					'name' => $source,
+				);
+			}
+			$results[] = array(
+				'ruleId'    => $source,
+				'ruleIndex' => $rule_idx[ $source ],
+				'level'     => 'fatal' === severity_of( $m ) ? 'error' : 'warning',
+				'message'   => array( 'text' => $m['message'] ),
+				'locations' => array(
+					array(
+						'physicalLocation' => array(
+							'artifactLocation' => array( 'uri' => $rel ),
+							'region'           => array( 'startLine' => max( 1, (int) $m['line'] ) ),
+						),
+					),
+				),
+			);
+		}
+	}
+
+	$sarif = array(
+		'$schema' => 'https://json.schemastore.org/sarif-2.1.0.json',
+		'version' => '2.1.0',
+		'runs'    => array(
+			array(
+				'tool'    => array(
+					'driver' => array(
+						'name'           => 'Pressready',
+						'informationUri' => 'https://github.com/itzmekhokan/pressready',
+						'rules'          => $rules,
+					),
+				),
+				'results' => $results,
+			),
+		),
+	);
+	echo json_encode( $sarif, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n";
+}
+
+/**
+ * Narrow the grouped components for large stacks.
+ *
+ * --only=<needle> keeps components whose id or label contains the needle
+ * (case-insensitive). --top=N keeps the N worst (the list is already sorted
+ * fatal-first by regroup()). Both are no-ops when their argument is empty/zero.
+ *
+ * @param array  $components Grouped components (id-keyed, pre-sorted).
+ * @param string $only       Case-insensitive substring filter, or ''.
+ * @param int    $top        Keep at most this many components, or 0 for all.
+ * @return array
+ */
+function filter_components( array $components, string $only, int $top ): array {
+	if ( '' !== $only ) {
+		$needle     = strtolower( $only );
+		$components = array_filter(
+			$components,
+			static fn( $c, $id ) => false !== strpos( strtolower( (string) $id ), $needle )
+				|| false !== strpos( strtolower( (string) $c['label'] ), $needle ),
+			ARRAY_FILTER_USE_BOTH
+		);
+	}
+	if ( $top > 0 && count( $components ) > $top ) {
+		$components = array_slice( $components, 0, $top, true );
+	}
+	return $components;
 }
 
 /**
@@ -464,8 +603,9 @@ function header_label( string $path ): ?string {
  *
  * @param array  $components Grouped findings (each has 'dir' + 'files').
  * @param string $root       Scan root; locations are shown relative to it.
+ * @param bool   $collapse   Group identical messages (one line + a location list).
  */
-function render_fix_first( array $components, string $root ): void {
+function render_fix_first( array $components, string $root, bool $collapse = true ): void {
 	$buckets = array( 'fatal' => array(), 'risky' => array() );
 	foreach ( $components as $c ) {
 		foreach ( $c['files'] as $rel => $findings ) {
@@ -476,9 +616,10 @@ function render_fix_first( array $components, string $root ): void {
 			}
 			foreach ( $findings as $f ) {
 				if ( isset( $buckets[ $f['severity'] ] ) ) {
+					$msg = $collapse ? neutralize_lines( $f['message'] ) : $f['message'];
 					$buckets[ $f['severity'] ][] = array(
 						'loc' => $path . ':' . $f['line'],
-						'msg' => compact_message( $f['message'] ),
+						'msg' => compact_message( $msg ),
 					);
 				}
 			}
@@ -486,16 +627,33 @@ function render_fix_first( array $components, string $root ): void {
 	}
 
 	$sections = array(
-		'fatal' => '  ✗ FATAL (%d) — these break on upgrade; fix first:',
-		'risky' => '  ⚠ RISKY (%d) — review the behaviour changes before upgrading:',
+		'fatal' => '  ' . ansi( '✗ FATAL (%d) — these break on upgrade; fix first:', '1;31' ),
+		'risky' => '  ' . ansi( '⚠ RISKY (%d) — review the behaviour changes before upgrading:', '1;33' ),
 	);
 	foreach ( $sections as $sev => $heading ) {
 		if ( empty( $buckets[ $sev ] ) ) {
 			continue;
 		}
 		printf( "\n" . $heading . "\n", count( $buckets[ $sev ] ) );
+
+		if ( ! $collapse ) {
+			foreach ( $buckets[ $sev ] as $row ) {
+				printf( "      %s  %s\n", $row['loc'], $row['msg'] );
+			}
+			continue;
+		}
+
+		// Collapse identical messages: print the message once with its locations.
+		$by_msg = array();
 		foreach ( $buckets[ $sev ] as $row ) {
-			printf( "      %s  %s\n", $row['loc'], $row['msg'] );
+			$by_msg[ $row['msg'] ][] = $row['loc'];
+		}
+		foreach ( $by_msg as $msg => $locs ) {
+			if ( 1 === count( $locs ) ) {
+				printf( "      %s  %s\n", $locs[0], $msg );
+			} else {
+				printf( "      %s  (×%d)\n        %s\n", $msg, count( $locs ), implode( ', ', $locs ) );
+			}
 		}
 	}
 }
@@ -510,14 +668,17 @@ function render_fix_first( array $components, string $root ): void {
  * @param string $wp         Target WP version.
  * @param string $since      Optional since version.
  * @param string $format     'grouped' or 'summary'.
+ * @param bool   $collapse   Collapse repeated identical findings within a file.
+ * @param int    $total_components Component count before --only/--top filtering.
+ * @param int    $shown_components Component count after filtering.
  */
-function render( array $components, array $tally, string $root, string $php, string $wp, string $since, string $format ): void {
+function render( array $components, array $tally, string $root, string $php, string $wp, string $since, string $format, bool $collapse = true, int $total_components = 0, int $shown_components = 0 ): void {
 	$total  = $tally['total'];
 	$fatals = $tally['fatal'];
 
 	$targets = array();
 	if ( '' !== $php ) {
-		$targets[] = "PHP $php";
+		$targets[] = 'PHP ' . str_replace( '-', '–', $php ); // en-dash for ranges, e.g. 8.1–8.4.
 	}
 	if ( '' !== $wp ) {
 		$targets[] = $since ? "WP $since → $wp" : "WP $wp";
@@ -531,34 +692,46 @@ function render( array $components, array $tally, string $root, string $php, str
 	$suppressed_note = ! empty( $tally['suppressed'] )
 		? sprintf( '  (%d suppressed by baseline)', $tally['suppressed'] )
 		: '';
+	$focus_note = ( $total_components > 0 && $shown_components < $total_components )
+		? sprintf( "  (showing %d of %d components)\n", $shown_components, $total_components )
+		: '';
+	echo $focus_note;
 
 	if ( 0 === $total ) {
 		printf( "\n  ✓ Nothing blocks this upgrade.%s\n\n", $suppressed_note );
 		return;
 	}
 
-	render_fix_first( $components, $root );
+	if ( 'table' === $format ) {
+		render_table( $components, $collapse );
+	} else {
+		render_fix_first( $components, $root, $collapse );
 
-	foreach ( $components as $c ) {
-		$badge = $c['fatal'] > 0 ? sprintf( '  ✗ %d fatal', $c['fatal'] ) : '';
-		printf( "\n  ▶ %s  —  %d finding%s%s\n", $c['label'], $c['count'], 1 === $c['count'] ? '' : 's', $badge );
-		if ( 'summary' === $format ) {
-			continue;
-		}
-		foreach ( $c['files'] as $rel => $findings ) {
-			echo "      $rel\n";
-			foreach ( $findings as $f ) {
-				printf( "        %5d  %-7s %s\n", $f['line'], '[' . $f['severity'] . ']', compact_message( $f['message'] ) );
+		foreach ( $components as $c ) {
+			$badge = $c['fatal'] > 0 ? sprintf( '  ✗ %d fatal', $c['fatal'] ) : '';
+			printf( "\n  ▶ %s  —  %d finding%s%s\n", $c['label'], $c['count'], 1 === $c['count'] ? '' : 's', $badge );
+			if ( 'summary' === $format ) {
+				continue;
+			}
+			foreach ( $c['files'] as $rel => $findings ) {
+				echo "      $rel\n";
+				$rows = $collapse ? collapse_findings( $findings ) : array_map( static fn( $f ) => $f + array( 'lines' => array( $f['line'] ), 'count' => 1 ), $findings );
+				foreach ( $rows as $f ) {
+					$sev_badge = color_severity( sprintf( '%-7s', '[' . $f['severity'] . ']' ), $f['severity'] );
+					$lines     = format_line_list( $f['lines'] );
+					$xn        = $f['count'] > 1 ? sprintf( '  (×%d)', $f['count'] ) : '';
+					printf( "        %s  %s %s%s\n", $lines, $sev_badge, compact_message( $f['message'] ), $xn );
+				}
 			}
 		}
 	}
 
 	$bits = array();
 	if ( $tally['fatal'] > 0 ) {
-		$bits[] = sprintf( '%d fatal', $tally['fatal'] );
+		$bits[] = ansi( sprintf( '%d fatal', $tally['fatal'] ), '1;31' );
 	}
 	if ( $tally['risky'] > 0 ) {
-		$bits[] = sprintf( '%d risky', $tally['risky'] );
+		$bits[] = ansi( sprintf( '%d risky', $tally['risky'] ), '1;33' );
 	}
 	$deprecations = $tally['php'] + $tally['wp'];
 	if ( $deprecations > 0 ) {
@@ -566,11 +739,11 @@ function render( array $components, array $tally, string $root, string $php, str
 	}
 
 	if ( $fatals > 0 ) {
-		$verdict = '  ✗ Upgrade will break — fix fatals first.';
+		$verdict = ansi( '  ✗ Upgrade will break — fix fatals first.', '1;31' );
 	} elseif ( $tally['risky'] > 0 ) {
-		$verdict = '  ⚠ No fatals, but review the risky behaviour changes before upgrading.';
+		$verdict = ansi( '  ⚠ No fatals, but review the risky behaviour changes before upgrading.', '1;33' );
 	} else {
-		$verdict = '  ✓ No fatals — safe to upgrade; clear deprecations at leisure.';
+		$verdict = ansi( '  ✓ No fatals — safe to upgrade; clear deprecations at leisure.', '0;32' );
 	}
 
 	printf(
@@ -598,6 +771,68 @@ function compact_message( string $message ): string {
 	// Collapse the "; Use X instead." / ". Use X instead." replacement clause to "→ X".
 	$message = preg_replace( '/[;.]?\s*Use (.+?)( instead)?\.?$/', ' → $1', $message );
 	return rtrim( $message, '.;' );
+}
+
+/**
+ * Collapse repeated identical findings within one file's finding list.
+ *
+ * Groups by (severity, message); each returned entry carries the original
+ * fields plus `lines` (every line it occurred on, ascending) and `count`.
+ * Large scans repeat the same sniff many times in one file — collapsing turns
+ * a wall of identical lines into one line with an occurrence count.
+ *
+ * @param array $findings Findings for a single file.
+ * @return array<int,array> Collapsed findings, fatal-first then by first line.
+ */
+function collapse_findings( array $findings ): array {
+	$groups = array();
+	foreach ( $findings as $f ) {
+		// Group by line-neutralised message so near-identical findings that only
+		// differ by an embedded line number (e.g. PHPCompatibility's func_get_args
+		// "changed on line N") collapse together.
+		$neutral = neutralize_lines( $f['message'] );
+		$key     = $f['severity'] . '|' . $neutral;
+		if ( ! isset( $groups[ $key ] ) ) {
+			$groups[ $key ]            = $f;
+			$groups[ $key ]['message'] = $neutral;
+			$groups[ $key ]['lines']   = array();
+			$groups[ $key ]['count']   = 0;
+		}
+		$groups[ $key ]['lines'][] = $f['line'];
+		++$groups[ $key ]['count'];
+	}
+	foreach ( $groups as &$g ) {
+		sort( $g['lines'], SORT_NUMERIC );
+	}
+	unset( $g );
+	return array_values( $groups );
+}
+
+/**
+ * Neutralise embedded line numbers in a sniff message ("line 554" → "line N")
+ * so otherwise-identical findings collapse into one group. Mirrors the
+ * normalisation used by baseline_signature().
+ *
+ * @param string $message Sniff message.
+ * @return string
+ */
+function neutralize_lines( string $message ): string {
+	return (string) preg_replace( '/\bline \d+/', 'line N', $message );
+}
+
+/**
+ * Format a list of line numbers for the compact listing, capping the visible
+ * count so a finding on 200 lines doesn't print 200 numbers.
+ *
+ * @param array $lines Line numbers (ascending).
+ * @return string e.g. "560" or "560, 666, 1025, … +4".
+ */
+function format_line_list( array $lines ): string {
+	if ( count( $lines ) <= 5 ) {
+		return implode( ', ', $lines );
+	}
+	$head = array_slice( $lines, 0, 5 );
+	return implode( ', ', $head ) . ', … +' . ( count( $lines ) - 5 );
 }
 
 /**
@@ -686,6 +921,251 @@ function find_phpcs(): ?string {
 }
 
 /**
+ * Map an --ignore-on level to the set of severity strings to suppress.
+ *
+ * Threshold model: 'deprecated' hides php+wp; 'risky' hides risky+deprecated;
+ * 'fatal' hides everything. Mirrors the opposite direction of --fail-on.
+ *
+ * @param string $level 'fatal', 'risky', 'deprecated' (or aliases); empty → no-op.
+ * @return string[]
+ */
+function ignore_severities( string $level ): array {
+	switch ( $level ) {
+		case 'fatal':
+			return array( 'fatal', 'risky', 'php', 'wp' );
+		case 'risky':
+			return array( 'risky', 'php', 'wp' );
+		case 'deprecated':
+		case 'any':
+		case 'warning':
+			return array( 'php', 'wp' );
+		default:
+			return array();
+	}
+}
+
+/**
+ * Remove findings of ignored severities from the raw PHPCS data structure.
+ *
+ * Applied before regroup/tally so all output paths (grouped, table, json,
+ * github) consistently omit ignored findings.
+ *
+ * @param array  $data  PHPCS JSON report.
+ * @param string $level --ignore-on level (empty string → returns $data unchanged).
+ * @return array
+ */
+function filter_data_ignored( array $data, string $level ): array {
+	$drop = ignore_severities( $level );
+	if ( empty( $drop ) ) {
+		return $data;
+	}
+	foreach ( $data['files'] as &$info ) {
+		if ( empty( $info['messages'] ) ) {
+			continue;
+		}
+		$info['messages'] = array_values(
+			array_filter(
+				$info['messages'],
+				static fn( $m ) => ! in_array( severity_of( $m ), $drop, true )
+			)
+		);
+		$info['errors']   = count( array_filter( $info['messages'], static fn( $m ) => 'ERROR' === $m['type'] ) );
+		$info['warnings'] = count( $info['messages'] ) - $info['errors'];
+	}
+	unset( $info );
+	return $data;
+}
+
+/**
+ * Return true when ANSI colour output should be written to STDOUT.
+ *
+ * Respects the NO_COLOR env spec (set to any value → off) and TERM=dumb.
+ * Override with PRESSREADY_COLOR=1 (force on) or PRESSREADY_COLOR=0 (force off).
+ *
+ * @return bool
+ */
+function should_colorize(): bool {
+	static $v = null;
+	if ( null !== $v ) {
+		return $v;
+	}
+	$override = getenv( 'PRESSREADY_COLOR' );
+	if ( '1' === $override ) {
+		return $v = true;
+	}
+	if ( '0' === $override ) {
+		return $v = false;
+	}
+	if ( false !== getenv( 'NO_COLOR' ) ) {
+		return $v = false;
+	}
+	if ( 'dumb' === getenv( 'TERM' ) ) {
+		return $v = false;
+	}
+	return $v = ( function_exists( 'posix_isatty' ) && posix_isatty( STDOUT ) );
+}
+
+/**
+ * Wrap $text in ANSI SGR codes when colourisation is active; otherwise a no-op.
+ *
+ * @param string $text Content to wrap.
+ * @param string $code SGR parameter string, e.g. '1;31' for bold-red.
+ * @return string
+ */
+function ansi( string $text, string $code ): string {
+	return should_colorize() ? "\033[{$code}m{$text}\033[0m" : $text;
+}
+
+/**
+ * Colorise a severity label that has already been padded to its final display width.
+ *
+ * Padding before colorising ensures ANSI bytes don't shift column alignment.
+ *
+ * @param string $label Padded label string (e.g. '[fatal]  ').
+ * @param string $sev   Severity key: 'fatal', 'risky', 'php', 'wp'.
+ * @return string
+ */
+function color_severity( string $label, string $sev ): string {
+	static $codes = array(
+		'fatal' => '1;31', // bold red
+		'risky' => '1;33', // bold yellow
+		'php'   => '0;36', // cyan
+		'wp'    => '0;36', // cyan
+	);
+	$code = $codes[ $sev ] ?? '';
+	return '' === $code ? $label : ansi( $label, $code );
+}
+
+/**
+ * Split a string into lines of at most $width visible characters, breaking at
+ * word boundaries where possible.
+ *
+ * @param string $text  Input text.
+ * @param int    $width Maximum line width.
+ * @return string[]
+ */
+function word_wrap_lines( string $text, int $width ): array {
+	if ( strlen( $text ) <= $width ) {
+		return array( $text );
+	}
+	$lines = array();
+	while ( strlen( $text ) > $width ) {
+		$chunk = substr( $text, 0, $width );
+		$pos   = strrpos( $chunk, ' ' );
+		if ( false === $pos || $pos < (int) ( $width / 4 ) ) {
+			$pos = $width; // hard break when no usable space found
+		}
+		$lines[] = substr( $text, 0, $pos );
+		$text    = ltrim( substr( $text, $pos ) );
+	}
+	if ( '' !== $text ) {
+		$lines[] = $text;
+	}
+	return $lines;
+}
+
+/**
+ * Truncate a string to $len characters, appending '...' if truncated.
+ *
+ * @param string $s   Input string.
+ * @param int    $len Maximum length.
+ * @return string
+ */
+function truncate_str( string $s, int $len ): string {
+	if ( strlen( $s ) <= $len ) {
+		return $s;
+	}
+	return substr( $s, 0, max( 0, $len - 3 ) ) . '...';
+}
+
+/**
+ * Render findings as a WP-CLI-style ASCII table (used by --format=table).
+ *
+ * Rows are sorted fatal-first, then risky, then deprecations. The message
+ * column word-wraps within the terminal width; other columns truncate with
+ * '...' when content exceeds their cap. The shared verdict printed by
+ * render() follows immediately after this function returns.
+ *
+ * @param array $components Grouped components (each with 'label' + 'files').
+ * @param bool  $collapse   Collapse identical (component+severity+message) rows.
+ */
+function render_table( array $components, bool $collapse = true ): void {
+	$order = array( 'fatal' => 0, 'risky' => 1, 'php' => 2, 'wp' => 3 );
+	$rows  = array();
+	foreach ( $components as $c ) {
+		foreach ( $c['files'] as $rel => $findings ) {
+			$list = $collapse ? collapse_findings( $findings ) : array_map( static fn( $f ) => $f + array( 'lines' => array( $f['line'] ), 'count' => 1 ), $findings );
+			foreach ( $list as $f ) {
+				$first = ( $rel . ':' . $f['lines'][0] );
+				$more  = $f['count'] > 1 ? sprintf( ' (+%d more)', $f['count'] - 1 ) : '';
+				$rows[] = array(
+					'severity'  => $f['severity'],
+					'component' => $c['label'],
+					'location'  => $first . $more,
+					'message'   => $f['message'],
+					'_sort'     => $order[ $f['severity'] ] ?? 9,
+				);
+			}
+		}
+	}
+	if ( empty( $rows ) ) {
+		return;
+	}
+	usort( $rows, static fn( $a, $b ) => $a['_sort'] <=> $b['_sort'] );
+
+	// Terminal width (fall back to 120 when tput is unavailable or piped).
+	$term_w = 120;
+	$tput   = trim( (string) shell_exec( 'tput cols 2>/dev/null' ) );
+	if ( '' !== $tput && (int) $tput > 40 ) {
+		$term_w = (int) $tput;
+	}
+
+	// Column widths: content-driven with hard caps; header labels set the minimum.
+	$col_sev = max( 8, min( 12, max( array_map( static fn( $r ) => strlen( $r['severity'] ), $rows ) ) ) );
+	$col_cmp = max( 9, min( 25, max( array_map( static fn( $r ) => strlen( $r['component'] ), $rows ) ) ) );
+	$col_loc = max( 8, min( 40, max( array_map( static fn( $r ) => strlen( $r['location'] ), $rows ) ) ) );
+	// Overhead per row: "| " + " | " + " | " + " | " + " |" = 13 chars.
+	$col_msg = max( 20, $term_w - $col_sev - $col_cmp - $col_loc - 13 );
+
+	$sep = sprintf(
+		'+%s+%s+%s+%s+',
+		str_repeat( '-', $col_sev + 2 ),
+		str_repeat( '-', $col_cmp + 2 ),
+		str_repeat( '-', $col_loc + 2 ),
+		str_repeat( '-', $col_msg + 2 )
+	);
+
+	echo "\n" . $sep . "\n";
+	printf( "| %-{$col_sev}s | %-{$col_cmp}s | %-{$col_loc}s | %-{$col_msg}s |\n",
+		'severity', 'component', 'location', 'message' );
+	echo $sep . "\n";
+
+	$blank_sev = str_repeat( ' ', $col_sev );
+	$blank_cmp = str_repeat( ' ', $col_cmp );
+	$blank_loc = str_repeat( ' ', $col_loc );
+
+	foreach ( $rows as $row ) {
+		$sev_raw   = $row['severity'];
+		$msg_lines = word_wrap_lines( $row['message'], $col_msg );
+
+		// Pad to final width first, then colorize — ANSI bytes must not affect alignment.
+		$sev_str = color_severity( str_pad( $sev_raw, $col_sev ), $sev_raw );
+		$cmp_str = str_pad( truncate_str( $row['component'], $col_cmp ), $col_cmp );
+		$loc_str = str_pad( truncate_str( $row['location'], $col_loc ), $col_loc );
+
+		printf( "| %s | %s | %s | %-{$col_msg}s |\n",
+			$sev_str, $cmp_str, $loc_str, $msg_lines[0] );
+
+		for ( $i = 1, $n = count( $msg_lines ); $i < $n; $i++ ) {
+			printf( "| %s | %s | %s | %-{$col_msg}s |\n",
+				$blank_sev, $blank_cmp, $blank_loc, $msg_lines[ $i ] );
+		}
+	}
+
+	echo $sep . "\n";
+}
+
+/**
  * Parse `--key=value` and bare `--flag` options.
  *
  * @param string[] $argv CLI arguments.
@@ -701,4 +1181,122 @@ function parse_opts( array $argv ): array {
 		}
 	}
 	return $opts;
+}
+
+/**
+ * Overlay a `.pressready.json` config under the CLI options.
+ *
+ * Precedence: CLI flag > config file > built-in default. The config path is
+ * --config=<file> if given, else `.pressready.json` in the cwd when present.
+ * Recognised keys mirror the flags; an `ignore` array is joined to a comma
+ * list, and boolean `true` maps to the bare-flag value '1'.
+ *
+ * @param array<string,string> $cli Options parsed from argv (these win).
+ * @return array<string,string>
+ */
+function apply_config( array $cli ): array {
+	$path = $cli['config'] ?? '';
+	if ( '' === $path ) {
+		$default = getcwd() . '/.pressready.json';
+		if ( ! is_file( $default ) ) {
+			return $cli;
+		}
+		$path = $default;
+	}
+	if ( ! is_file( $path ) ) {
+		fwrite( STDERR, "error: config not found: $path\n" );
+		exit( 2 );
+	}
+	$config = json_decode( (string) file_get_contents( $path ), true );
+	if ( ! is_array( $config ) ) {
+		fwrite( STDERR, "error: config is not valid JSON: $path\n" );
+		exit( 2 );
+	}
+
+	$allowed = array(
+		'php', 'wp', 'since', 'path', 'format', 'fail-on', 'ignore-on',
+		'parallel', 'cache', 'ignore', 'only', 'top', 'baseline',
+		'no-default-ignore', 'no-collapse', 'no-cache',
+	);
+	foreach ( $allowed as $key ) {
+		if ( isset( $cli[ $key ] ) || ! array_key_exists( $key, $config ) ) {
+			continue; // CLI wins; skip keys the config doesn't set.
+		}
+		$value = $config[ $key ];
+		if ( is_bool( $value ) ) {
+			if ( $value ) {
+				$cli[ $key ] = '1';
+			}
+		} elseif ( is_array( $value ) ) {
+			$cli[ $key ] = implode( ',', $value );
+		} else {
+			$cli[ $key ] = (string) $value;
+		}
+	}
+	return $cli;
+}
+
+/**
+ * Resolve the phpcs `--parallel` worker count.
+ *
+ * Parallelism needs ext-pcntl (absent on Windows). ON by default at the CPU
+ * core count; --parallel=N overrides, --parallel=1 disables.
+ *
+ * @param array<string,string> $opts Merged options.
+ * @return int Worker count (1 = serial).
+ */
+function resolve_parallel( array $opts ): int {
+	if ( ! extension_loaded( 'pcntl' ) ) {
+		return 1;
+	}
+	// Explicit --parallel=N (including =1 to disable). Absent → auto by default.
+	if ( isset( $opts['parallel'] ) ) {
+		return max( 1, (int) $opts['parallel'] );
+	}
+	return detect_cpu_count();
+}
+
+/**
+ * Best-effort CPU core count for the default parallel worker pool.
+ *
+ * @return int Core count (>= 1), capped to a sane upper bound; 4 on fallback.
+ */
+function detect_cpu_count(): int {
+	$n = 0;
+	if ( function_exists( 'shell_exec' ) ) {
+		$out = trim( (string) ( shell_exec( 'nproc 2>/dev/null' ) ?: shell_exec( 'sysctl -n hw.ncpu 2>/dev/null' ) ) );
+		if ( ctype_digit( $out ) ) {
+			$n = (int) $out;
+		}
+	}
+	if ( $n < 1 ) {
+		$n = 4; // Reasonable default when detection fails.
+	}
+	return min( $n, 16 ); // Diminishing returns past this; keep memory sane.
+}
+
+/**
+ * Build the comma-separated phpcs `--ignore` pattern list.
+ *
+ * Sensible built-in excludes (un-fixable vendored / generated / minified / test
+ * code) are always on unless --no-default-ignore is given; user --ignore
+ * patterns are appended.
+ *
+ * @param array<string,string> $opts Merged options.
+ * @return string Comma list, or '' when nothing to ignore.
+ */
+function build_ignore_patterns( array $opts ): string {
+	$patterns = array();
+	if ( ! isset( $opts['no-default-ignore'] ) ) {
+		$patterns = array( '*/vendor/*', '*/node_modules/*', '*/build/*', '*/dist/*', '*.min.php', '*/tests/*' );
+	}
+	if ( isset( $opts['ignore'] ) && '' !== $opts['ignore'] && '1' !== $opts['ignore'] ) {
+		foreach ( explode( ',', $opts['ignore'] ) as $p ) {
+			$p = trim( $p );
+			if ( '' !== $p ) {
+				$patterns[] = $p;
+			}
+		}
+	}
+	return implode( ',', $patterns );
 }
