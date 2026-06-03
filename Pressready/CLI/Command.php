@@ -1,5 +1,11 @@
 <?php
 /**
+ * Pressready — WordPress upgrade-readiness scanner.
+ *
+ * @copyright 2026 Khokan Sardar
+ * @license   GPL-2.0-or-later
+ * @link      https://github.com/itzmekhokan/pressready
+ *
  * The `wp pressready` WP-CLI command.
  *
  * A thin adapter over the same engine as the standalone `bin/pressready` CLI

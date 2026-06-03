@@ -1,5 +1,11 @@
 <?php
 /**
+ * Pressready — WordPress upgrade-readiness scanner.
+ *
+ * @copyright 2026 Khokan Sardar
+ * @license   GPL-2.0-or-later
+ * @link      https://github.com/itzmekhokan/pressready
+ *
  * WordPress deprecations dataset generator.
  *
  * Walks the WordPress core source tree and extracts every deprecation declared

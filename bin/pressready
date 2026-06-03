@@ -1,6 +1,12 @@
 #!/usr/bin/env php
 <?php
 /**
+ * Pressready — WordPress upgrade-readiness scanner.
+ *
+ * @copyright 2026 Khokan Sardar
+ * @license   GPL-2.0-or-later
+ * @link      https://github.com/itzmekhokan/pressready
+ *
  * pressready — driver around the PHPCS Pressready + PHPCompatibility standards.
  *
  * Runs both engines in a single PHPCS pass over a path, then groups findings by

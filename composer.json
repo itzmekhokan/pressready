@@ -4,6 +4,14 @@
     "type": "phpcodesniffer-standard",
     "keywords": ["wordpress", "phpcs", "phpcompatibility", "static-analysis", "upgrade", "compatibility", "deprecations"],
     "license": "GPL-2.0-or-later",
+    "authors": [
+        {
+            "name": "Khokan Sardar",
+            "email": "itzmekhokan@gmail.com",
+            "homepage": "https://github.com/itzmekhokan",
+            "role": "Author"
+        }
+    ],
     "require": {
         "php": ">=7.4",
         "phpcompatibility/phpcompatibility-wp": "3.0.0-alpha2",
