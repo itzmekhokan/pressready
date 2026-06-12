@@ -225,7 +225,10 @@ vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--format=sarif</span> -
 <span class="c"># A PHP upgrade path — everything that breaks across 8.1 → 8.4.</span>
 vendor/bin/pressready <span class="k">--php=8.1-8.4</span> --path=.
 
-<span class="c"># Hide the deprecation tail; show only fatals and risky changes.</span>
+<span class="c"># Deprecations are hidden by default — add --all to list the full tail.</span>
+vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--all</span> --path=.
+
+<span class="c"># Drop deprecations from the report and exit code entirely.</span>
 vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--ignore-on=deprecated</span> --path=.</pre>
     <p style="margin-top:16px;color:var(--muted);font-size:14.5px">
       <code>--format</code>: <code>grouped</code> (default) · <code>table</code> · <code>summary</code> · <code>json</code> · <code>sarif</code> · <code>github</code><br>
@@ -258,7 +261,7 @@ vendor/bin/pressready --php=8.4 --wp=6.9 \
   --path=wp-content <span class="k">--only=woocommerce</span></pre>
       </div>
     </div>
-    <p style="margin-top:16px;color:var(--muted);font-size:14.5px">Un-fixable / generated code is skipped by default (<code>vendor</code>, <code>node_modules</code>, <code>build</code>, <code>dist</code>, <code>*.min.php</code>, <code>tests</code>). Add your own with <code>--ignore=&lt;patterns&gt;</code> or turn the built-ins off with <code>--no-default-ignore</code>. Repeated identical findings collapse into one line with an <code>(×N)</code> count.</p>
+    <p style="margin-top:16px;color:var(--muted);font-size:14.5px">Un-fixable / generated code is skipped by default (<code>vendor</code>, <code>node_modules</code>, <code>build</code>, <code>dist</code>, <code>*.min.php</code>, <code>tests</code>). Add your own with <code>--ignore=&lt;patterns&gt;</code> or turn the built-ins off with <code>--no-default-ignore</code>. Repeated identical findings collapse into one line with an <code>(×N)</code> count. The long deprecation tail is hidden by default — each component header keeps its deprecation count, and <code>--all</code> lists them in full.</p>
 
     <h3 style="font-size:18px;margin:28px 0 8px">Config file</h3>
     <p style="color:var(--muted);font-size:14.5px;margin:0 0 10px">Commit shared defaults to a <code>.pressready.json</code> in your project root — CLI flags always win.</p>
@@ -319,6 +322,7 @@ wp pressready scan --php=8.4 <span class="k">--format=csv</span></pre>
         <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--cache[=&lt;file&gt;]</code></td><td style="color:var(--muted)">Cache results so re-scans only reprocess changed files.</td></tr>
         <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--ignore=&lt;patterns&gt;</code></td><td style="color:var(--muted)">Extra comma-separated path patterns to skip (<code>--no-default-ignore</code> drops the built-ins).</td></tr>
         <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--only / --top</code></td><td style="color:var(--muted)">Focus the report: one component by name, or the N worst.</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--all</code></td><td style="color:var(--muted)">List every deprecation inline. By default the tail is hidden so fatals/risky stay scannable (<code>--verbose</code> is an alias).</td></tr>
         <tr><td style="padding:4px 12px 4px 0;vertical-align:top"><code>--config=&lt;file&gt;</code></td><td style="color:var(--muted)">Load defaults from a JSON config file (CLI flags still win).</td></tr>
       </table>
     </div>
