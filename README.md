@@ -113,6 +113,7 @@ vendor/bin/pressready --php=8.1-8.4 --path=wp-content
 
 On a large `wp-content` the report leads with a **fix-first block** — every `fatal` then every `risky` finding with a clickable `path:line` — so upgrade blockers aren't buried under the deprecation tail. Key output behaviours:
 
+- **Deprecations hidden by default** — the report shows fatals and risky findings inline; each component header still carries its deprecation count, and `--all` lists the full deprecation tail when you're ready to clear it
 - **Duplicate collapse** — identical findings show once as `(×N)` with a line list (disable with `--no-collapse`)
 - **Colour-coded severities** — red fatal, yellow risky, cyan deprecation (auto-off when piped)
 - **Live progress spinner** — shown on a TTY, suppressed in CI and pipes
@@ -138,6 +139,7 @@ On a large `wp-content` the report leads with a **fix-first block** — every `f
 | `--only=<needle>` | Show only components whose name matches this substring |
 | `--top=N` | Show only the N worst components (most fatals first) |
 | `--no-collapse` | Show one line per finding instead of collapsing duplicates |
+| `--all` | List every deprecation inline. By default the deprecation tail is hidden so fatals/risky stay scannable (`--verbose` is an alias) |
 | `--baseline[=<file>]` | Suppress findings present in the baseline snapshot |
 | `--generate-baseline[=<file>]` | Snapshot current findings to a baseline file and exit |
 | `--config=<file>` | Load defaults from a JSON config file (CLI flags always win) |

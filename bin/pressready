@@ -20,7 +20,7 @@
  * This is the engine the future `wp … pressready` WP-CLI command will reuse.
  *
  * Usage:
- *   pressready [--php=8.4] [--wp=6.9] [--since=6.4] [--path=.]
+ *   pressready [--php=8.4] [--wp=6.9] [--since=6.4] [--path=.] [--all]
  *              [--format=grouped|table|json|summary|github] [--fail-on=fatal|risky|deprecated]
  *              [--ignore-on=fatal|risky|deprecated] [--baseline[=file]] [--generate-baseline[=file]]
  *
@@ -227,7 +227,8 @@ function main( array $argv ): void {
 	}
 
 	$collapse = ! isset( $opts['no-collapse'] );
-	render( $grouped, $tally, $root, $php, $wp, $since, $format, $collapse, $total_components, $shown_components );
+	$show_all = isset( $opts['all'] ) || isset( $opts['verbose'] );
+	render( $grouped, $tally, $root, $php, $wp, $since, $format, $collapse, $total_components, $shown_components, $show_all );
 	exit( exit_code( $tally, $opts ) );
 }
 
@@ -677,8 +678,9 @@ function render_fix_first( array $components, string $root, bool $collapse = tru
  * @param bool   $collapse   Collapse repeated identical findings within a file.
  * @param int    $total_components Component count before --only/--top filtering.
  * @param int    $shown_components Component count after filtering.
+ * @param bool   $show_all   List every deprecation inline (default hides them).
  */
-function render( array $components, array $tally, string $root, string $php, string $wp, string $since, string $format, bool $collapse = true, int $total_components = 0, int $shown_components = 0 ): void {
+function render( array $components, array $tally, string $root, string $php, string $wp, string $since, string $format, bool $collapse = true, int $total_components = 0, int $shown_components = 0, bool $show_all = false ): void {
 	$total  = $tally['total'];
 	$fatals = $tally['fatal'];
 
@@ -714,12 +716,21 @@ function render( array $components, array $tally, string $root, string $php, str
 		render_fix_first( $components, $root, $collapse );
 
 		foreach ( $components as $c ) {
-			$badge = $c['fatal'] > 0 ? sprintf( '  ✗ %d fatal', $c['fatal'] ) : '';
+			$cnt   = component_counts( $c );
+			$badge = component_badge( $cnt );
 			printf( "\n  ▶ %s  —  %d finding%s%s\n", $c['label'], $c['count'], 1 === $c['count'] ? '' : 's', $badge );
 			if ( 'summary' === $format ) {
 				continue;
 			}
 			foreach ( $c['files'] as $rel => $findings ) {
+				// Default view hides the long deprecation tail so the actionable
+				// fatal/risky findings stay scannable; --all restores everything.
+				if ( ! $show_all ) {
+					$findings = array_values( array_filter( $findings, static fn( $f ) => in_array( $f['severity'], array( 'fatal', 'risky' ), true ) ) );
+					if ( empty( $findings ) ) {
+						continue; // Pure-deprecation file — only its component header shows.
+					}
+				}
 				echo "      $rel\n";
 				$rows = $collapse ? collapse_findings( $findings ) : array_map( static fn( $f ) => $f + array( 'lines' => array( $f['line'] ), 'count' => 1 ), $findings );
 				foreach ( $rows as $f ) {
@@ -753,13 +764,65 @@ function render( array $components, array $tally, string $root, string $php, str
 	}
 
 	printf(
-		"\n  %s across %d component%s.%s%s\n\n",
+		"\n  %s across %d component%s.%s%s\n",
 		implode( ', ', $bits ),
 		count( $components ),
 		1 === count( $components ) ? '' : 's',
 		$verdict,
 		$suppressed_note
 	);
+
+	// Nudge toward the full listing when deprecations were hidden from the
+	// default view (grouped only — summary never lists findings anyway).
+	if ( ! $show_all && $deprecations > 0 && 'summary' !== $format ) {
+		printf(
+			"%s\n",
+			ansi( sprintf( '  ↳ %d deprecation%s hidden — run with --all to list them.', $deprecations, 1 === $deprecations ? '' : 's' ), '0;90' )
+		);
+	}
+	echo "\n";
+}
+
+/**
+ * Per-component severity counts for the component header badge.
+ *
+ * @param array $c One grouped component (has 'files').
+ * @return array{fatal:int,risky:int,dep:int}
+ */
+function component_counts( array $c ): array {
+	$n = array( 'fatal' => 0, 'risky' => 0, 'dep' => 0 );
+	foreach ( $c['files'] as $findings ) {
+		foreach ( $findings as $f ) {
+			if ( 'fatal' === $f['severity'] ) {
+				++$n['fatal'];
+			} elseif ( 'risky' === $f['severity'] ) {
+				++$n['risky'];
+			} else {
+				++$n['dep'];
+			}
+		}
+	}
+	return $n;
+}
+
+/**
+ * Build the coloured "(4 fatal, 3 risky, 184 deprecations)" component badge.
+ *
+ * @param array{fatal:int,risky:int,dep:int} $cnt Per-component counts.
+ * @return string Badge with a leading separator, or '' when empty.
+ */
+function component_badge( array $cnt ): string {
+	$bits = array();
+	if ( $cnt['fatal'] > 0 ) {
+		$bits[] = ansi( sprintf( '%d fatal', $cnt['fatal'] ), '1;31' );
+	}
+	if ( $cnt['risky'] > 0 ) {
+		$bits[] = ansi( sprintf( '%d risky', $cnt['risky'] ), '1;33' );
+	}
+	if ( $cnt['dep'] > 0 ) {
+		$bits[] = sprintf( '%d deprecation%s', $cnt['dep'], 1 === $cnt['dep'] ? '' : 's' );
+	}
+	return empty( $bits ) ? '' : '  (' . implode( ', ', $bits ) . ')';
 }
 
 /**
@@ -1222,7 +1285,7 @@ function apply_config( array $cli ): array {
 	$allowed = array(
 		'php', 'wp', 'since', 'path', 'format', 'fail-on', 'ignore-on',
 		'parallel', 'cache', 'ignore', 'only', 'top', 'baseline',
-		'no-default-ignore', 'no-collapse', 'no-cache',
+		'no-default-ignore', 'no-collapse', 'no-cache', 'all',
 	);
 	foreach ( $allowed as $key ) {
 		if ( isset( $cli[ $key ] ) || ! array_key_exists( $key, $config ) ) {
