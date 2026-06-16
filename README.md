@@ -46,14 +46,40 @@ Under the hood Pressready runs two engines in a single PHPCS pass: [PHPCompatibi
 
 ## Install
 
-> **PHP 8.2–8.4 detection** needs `PHPCompatibility 10`, which ships as a pre-release. Your project must allow dev stability (it still prefers stable for everything else).
+Pressready installs in two tiers depending on how new a PHP version you need to target.
 
-**Add to your `composer.json` once:**
+### Default — no config (PHP ≤ 8.1)
+
+The standard install needs **no stability config**. It pulls the stable PHPCompatibility engine, which detects everything up to **PHP 8.1** plus the full WordPress deprecations axis:
+
+```bash
+composer require --dev itzmekhokan/pressready
+```
+
+This works under a normal `"minimum-stability": "stable"` project. Most sites can stop here.
+
+### Targeting PHP 8.2–8.4 — opt in to the pre-release engine
+
+PHP 8.2–8.4 detection needs `PHPCompatibility 10`, which only ships as a pre-release. Allow dev stability **and** request the pre-release engine explicitly (Composer prefers stable otherwise, so you must name it):
+
+```bash
+composer config minimum-stability dev
+composer config prefer-stable true
+composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+composer config --no-plugins allow-plugins.phpcsstandards/phpcsutils true
+composer require --dev itzmekhokan/pressready phpcompatibility/phpcompatibility-wp:3.0.0-alpha2
+```
+
+Equivalent `composer.json`:
 
 ```jsonc
 {
     "minimum-stability": "dev",
     "prefer-stable": true,
+    "require-dev": {
+        "itzmekhokan/pressready": "*",
+        "phpcompatibility/phpcompatibility-wp": "3.0.0-alpha2"
+    },
     "config": {
         "allow-plugins": {
             "dealerdirect/phpcodesniffer-composer-installer": true,
@@ -63,23 +89,7 @@ Under the hood Pressready runs two engines in a single PHPCS pass: [PHPCompatibi
 }
 ```
 
-**Then install:**
-
-```bash
-composer require --dev itzmekhokan/pressready
-```
-
-Or configure and install in one go from the command line:
-
-```bash
-composer config minimum-stability dev
-composer config prefer-stable true
-composer config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
-composer config --no-plugins allow-plugins.phpcsstandards/phpcsutils true
-composer require --dev itzmekhokan/pressready
-```
-
-**Verify the standards registered:**
+### Verify the standards registered
 
 ```bash
 vendor/bin/phpcs -i   # should list "Pressready" and "PHPCompatibilityWP"
