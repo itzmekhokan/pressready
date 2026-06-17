@@ -89,6 +89,38 @@ Equivalent `composer.json`:
 }
 ```
 
+### Global install — scan many sites from one place
+
+Prefer one shared install for ad-hoc scans across all your local sites? Install it globally. Configure global Composer once (the dev-stability lines are only needed for PHP 8.2–8.4 — drop them if you only target PHP ≤ 8.1):
+
+```bash
+# Configure global Composer once
+composer global config minimum-stability dev
+composer global config prefer-stable true
+composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+composer global config --no-plugins allow-plugins.phpcsstandards/phpcsutils true
+
+# Install globally (drop the explicit engine pin if you only target PHP ≤ 8.1)
+composer global require itzmekhokan/pressready phpcompatibility/phpcompatibility-wp:3.0.0-alpha2
+
+# Put the global bin on your PATH (zsh; use ~/.bashrc for bash)
+echo 'export PATH="$PATH:$(composer global config home)/vendor/bin"' >> ~/.zshrc && source ~/.zshrc
+```
+
+Then scan any site from anywhere by pointing `--path` at its `wp-content`:
+
+```bash
+pressready --php=8.2 --path=/path/to/site/wp-content
+
+# Sweep every project under a dev root
+for proj in */ ; do
+  echo "===== $proj ====="
+  pressready --php=8.2 --path="$proj/wp-content" --format=summary
+done
+```
+
+Global is ideal for a developer's local sweeps across many sites. For **CI and team reproducibility**, still use `composer require --dev` per project so the engine version is pinned in each `composer.lock`.
+
 ### Verify the standards registered
 
 ```bash

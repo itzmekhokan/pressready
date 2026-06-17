@@ -200,6 +200,24 @@ composer require --dev itzmekhokan/pressready phpcompatibility/phpcompatibility-
 <span class="c"># Verify the standards registered</span>
 vendor/bin/phpcs -i   <span class="c"># lists "Pressready" and "PHPCompatibilityWP"</span></pre>
     <p style="margin-top:16px;color:var(--muted);font-size:14.5px">Requires PHP 7.4+. The PHP 8.2–8.4 engine (PHPCompatibility 10.x) is pre-release — this opt-in step goes away once it ships stable.</p>
+
+    <h3 style="margin-top:20px">Global install — scan many sites from one place</h3>
+    <p style="color:var(--muted);font-size:14.5px">Prefer one shared install for ad-hoc scans across all your local sites? Install it globally. Configure global Composer once (same stability rules — drop the <code>minimum-stability</code>/<code>prefer-stable</code> lines if you only target PHP ≤ 8.1), then require it:</p>
+    <pre><span class="c"># Configure global Composer once (the dev-stability lines are only needed for PHP 8.2–8.4)</span>
+composer global config minimum-stability dev
+composer global config prefer-stable true
+composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
+composer global config --no-plugins allow-plugins.phpcsstandards/phpcsutils true
+
+<span class="c"># Install globally (drop the explicit engine pin if you only target PHP ≤ 8.1)</span>
+composer global require itzmekhokan/pressready phpcompatibility/phpcompatibility-wp:3.0.0-alpha2
+
+<span class="c"># Put the global bin on your PATH (zsh; use ~/.bashrc for bash)</span>
+echo 'export PATH="$PATH:$(composer global config home)/vendor/bin"' &gt;&gt; ~/.zshrc &amp;&amp; source ~/.zshrc
+
+<span class="c"># Verify, then scan any site by path</span>
+pressready --php=8.2 --path=/path/to/site/wp-content</pre>
+    <p style="margin-top:16px;color:var(--muted);font-size:14.5px">Global is ideal for a developer's local sweeps across many sites. For <strong>CI and team reproducibility</strong>, still use <code>composer require --dev</code> per project so the engine version is pinned in each <code>composer.lock</code>.</p>
   </div>
 </section>
 
