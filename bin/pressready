@@ -46,8 +46,13 @@ main( $argv );
  * @param string[] $argv CLI arguments.
  */
 function main( array $argv ): void {
+	// --help / -h: print usage and exit cleanly, before any target validation.
+	if ( in_array( '--help', $argv, true ) || in_array( '-h', $argv, true ) ) {
+		print_usage();
+		exit( 0 );
+	}
+
 	$opts   = apply_config( parse_opts( $argv ) ); // CLI > .pressready.json > defaults.
-	$root   = realpath( $opts['path'] ?? getcwd() );
 	$php    = $opts['php'] ?? '';
 	$wp     = $opts['wp'] ?? '';
 	$since  = $opts['since'] ?? '';
@@ -63,10 +68,21 @@ function main( array $argv ): void {
 		fwrite( STDERR, "error: --php must be a version or range, e.g. 8.4 or 8.1-8.4\n" );
 		exit( 2 );
 	}
-	if ( false === $root ) {
-		fwrite( STDERR, "error: --path does not exist\n" );
-		exit( 2 );
+
+	// Resolve one or more scan targets (repeated --path, comma lists, config
+	// `paths: []`). Every target must exist; $root is their common base, used to
+	// show paths relative to the scan in reports.
+	$targets_in = resolve_scan_paths( $opts );
+	$roots      = array();
+	foreach ( $targets_in as $p ) {
+		$rp = realpath( $p );
+		if ( false === $rp ) {
+			fwrite( STDERR, "error: --path does not exist: $p\n" );
+			exit( 2 );
+		}
+		$roots[] = $rp;
 	}
+	$root = common_base( $roots );
 
 	$phpcs = find_phpcs();
 	if ( null === $phpcs ) {
@@ -134,7 +150,9 @@ function main( array $argv ): void {
 		$args[] = 'testVersion';
 		$args[] = $php;
 	}
-	$args[] = $root;
+	foreach ( $roots as $r ) {
+		$args[] = $r; // phpcs accepts multiple trailing paths in one pass.
+	}
 
 	// Run phpcs with an unlimited memory limit: tokenizing a large stack (or a
 	// single big file) easily blows past PHP's default 128M, and phpcs then dies
@@ -168,6 +186,23 @@ function main( array $argv ): void {
 		}
 		exit( 2 );
 	}
+
+	// Scanning zero files must fail loudly, never pass vacuously: an empty file
+	// map means the path/ignore filters matched nothing (a clean scan still lists
+	// every checked file with empty messages). In CI this is a misconfiguration,
+	// not a green light. (Exit 2 = usage/config error — see exit_code().)
+	if ( empty( $data['files'] ) ) {
+		fwrite( STDERR, "error: no files were scanned — check --path and --ignore filters\n" );
+		if ( '' !== $stderr ) {
+			fwrite( STDERR, "phpcs reported:\n" . $stderr . "\n" );
+		}
+		exit( 2 );
+	}
+
+	// Drop PHPCS tokenizer artefacts (Internal.*, e.g. NoCodeFound on a template
+	// with no PHP). They are not compatibility findings and otherwise inflate the
+	// deprecation totals — done before baseline/tally so every path is consistent.
+	$data = strip_internal( $data );
 
 	// Generate-baseline mode: snapshot the current findings and exit. Adopt the
 	// tool on a legacy site without drowning — only NEW findings fail CI after.
@@ -233,6 +268,156 @@ function main( array $argv ): void {
 }
 
 /**
+ * Print the usage / flag reference for --help / -h.
+ *
+ * @return void
+ */
+function print_usage(): void {
+	echo <<<USAGE
+Pressready — WordPress upgrade-readiness scanner.
+
+Usage:
+  pressready --php=<ver> [--wp=<ver>] [--path=<dir>]... [options]
+
+At least one of --php or --wp is required.
+
+Targets:
+  --php=<ver>            Target PHP version or range, e.g. 8.4 or 8.1-8.4
+  --wp=<ver>             Target WordPress version, e.g. 6.9
+  --since=<ver>          With --wp: only what newly deprecates since this version
+  --path=<dir>           Path to scan (repeatable; comma lists ok; default: cwd)
+
+Output:
+  --format=<fmt>         grouped (default) | table | summary | json | sarif | github
+  --all                  List every deprecation inline (alias: --verbose)
+  --no-collapse          One line per finding instead of collapsing duplicates
+
+Gate:
+  --fail-on=<lvl>        Exit non-zero at/above: fatal | risky | deprecated
+  --ignore-on=<lvl>      Hide findings at/below: fatal | risky | deprecated
+
+Scope & performance:
+  --ignore=<patterns>    Extra comma-separated path patterns to skip
+  --no-default-ignore    Disable the built-in ignores
+  --only=<needle>        Only components whose name matches this substring
+  --top=N                Only the N worst components
+  --parallel[=N]         phpcs workers (default: on, auto CPU cores; =1 serial)
+  --cache[=<file>]       Re-scans only reprocess changed files
+  --no-cache             Force a fresh scan even when --cache is set
+
+Baseline & config:
+  --baseline[=<file>]            Suppress findings present in the snapshot
+  --generate-baseline[=<file>]   Snapshot current findings and exit
+  --config=<file>                Load defaults from a JSON config file
+  -h, --help                     Show this help and exit
+
+Exit codes:
+  0  clean (or no --fail-on threshold tripped)
+  1  findings at/above the --fail-on threshold
+  2  usage/config error (bad flag, missing path, zero files scanned)
+
+Docs: https://itzmekhokan.github.io/pressready/
+
+USAGE;
+}
+
+/**
+ * Resolve the list of scan-target paths from the merged options.
+ *
+ * Accepts repeated `--path` flags, comma-separated lists in a single `--path`,
+ * and a config `paths: []` array (surfaced by apply_config under `paths`).
+ * Values are de-duplicated, preserving order. Empty → caller defaults to cwd.
+ *
+ * @param array $opts Merged options.
+ * @return string[] Path inputs (not yet realpath'd).
+ */
+function resolve_scan_paths( array $opts ): array {
+	$raw = array();
+	if ( isset( $opts['path'] ) ) {
+		$raw = array_merge( $raw, is_array( $opts['path'] ) ? $opts['path'] : array( $opts['path'] ) );
+	}
+	if ( isset( $opts['paths'] ) && '1' !== $opts['paths'] ) {
+		$raw = array_merge( $raw, is_array( $opts['paths'] ) ? $opts['paths'] : array( $opts['paths'] ) );
+	}
+
+	$paths = array();
+	foreach ( $raw as $value ) {
+		foreach ( explode( ',', (string) $value ) as $p ) {
+			$p = trim( $p );
+			if ( '' !== $p && ! in_array( $p, $paths, true ) ) {
+				$paths[] = $p;
+			}
+		}
+	}
+	return empty( $paths ) ? array( getcwd() ) : $paths;
+}
+
+/**
+ * Longest common directory prefix of a set of realpath'd scan roots.
+ *
+ * Used to show finding locations relative to the scan when several paths are
+ * given. A single path is returned as-is (it may be a file, which the
+ * relativisers already handle). A divergent set collapses to '/'.
+ *
+ * @param string[] $roots Absolute paths (each a file or directory).
+ * @return string
+ */
+function common_base( array $roots ): string {
+	if ( 1 === count( $roots ) ) {
+		return $roots[0];
+	}
+	$segments = null;
+	foreach ( $roots as $r ) {
+		$dir   = is_dir( $r ) ? $r : dirname( $r );
+		$parts = explode( '/', rtrim( $dir, '/' ) );
+		if ( null === $segments ) {
+			$segments = $parts;
+			continue;
+		}
+		$common = array();
+		foreach ( $segments as $i => $seg ) {
+			if ( isset( $parts[ $i ] ) && $parts[ $i ] === $seg ) {
+				$common[] = $seg;
+			} else {
+				break;
+			}
+		}
+		$segments = $common;
+	}
+	$base = implode( '/', $segments ?? array() );
+	return '' === $base ? '/' : $base;
+}
+
+/**
+ * Remove PHPCS internal tokenizer artefacts (source `Internal.*`) from a report.
+ *
+ * The most common is `Internal.NoCodeFound`, emitted for template files with no
+ * PHP (e.g. *.blade.php). These are parser notices, not compatibility findings,
+ * so they must not land in the severity buckets. Per-file error/warning counts
+ * are recomputed so downstream consumers stay consistent.
+ *
+ * @param array $data PHPCS JSON report.
+ * @return array
+ */
+function strip_internal( array $data ): array {
+	foreach ( $data['files'] as &$info ) {
+		if ( empty( $info['messages'] ) ) {
+			continue;
+		}
+		$info['messages'] = array_values(
+			array_filter(
+				$info['messages'],
+				static fn( $m ) => ! str_starts_with( (string) ( $m['source'] ?? '' ), 'Internal.' )
+			)
+		);
+		$info['errors']   = count( array_filter( $info['messages'], static fn( $m ) => 'ERROR' === $m['type'] ) );
+		$info['warnings'] = count( $info['messages'] ) - $info['errors'];
+	}
+	unset( $info );
+	return $data;
+}
+
+/**
  * A baseline signature for a finding: stable across line moves / reordering.
  * Keyed by the sniff source plus the message with line numbers neutralised.
  *
@@ -242,6 +427,26 @@ function main( array $argv ): void {
 function baseline_signature( array $m ): string {
 	$msg = preg_replace( '/\bline \d+/', 'line N', $m['message'] ?? '' );
 	return ( $m['source'] ?? '' ) . '|' . $msg;
+}
+
+/**
+ * Repo-relative key for a finding's file in the baseline.
+ *
+ * Keys are made relative to the current working directory (the repo root in CI
+ * and local runs alike) when the file lives under it, so a baseline is portable
+ * regardless of whether --path was passed absolute or relative, or scoped to a
+ * subdirectory. Files outside the cwd fall back to scan-root-relative.
+ *
+ * @param string $file Absolute file path.
+ * @param string $root Scan root (common base of the scan targets).
+ * @return string
+ */
+function baseline_relpath( string $file, string $root ): string {
+	$cwd = rtrim( (string) getcwd(), '/' );
+	if ( '' !== $cwd && str_starts_with( $file, $cwd . '/' ) ) {
+		return ltrim( substr( $file, strlen( $cwd ) ), '/' );
+	}
+	return ltrim( str_replace( $root, '', $file ), '/' );
 }
 
 /**
@@ -262,7 +467,7 @@ function generate_baseline( array $data, string $root, string $path ): int {
 		if ( empty( $info['messages'] ) ) {
 			continue;
 		}
-		$rel = ltrim( str_replace( $root, '', $file ), '/' );
+		$rel = baseline_relpath( $file, $root );
 		foreach ( $info['messages'] as $m ) {
 			$sig = baseline_signature( $m );
 			$findings[ $rel ][ $sig ] = ( $findings[ $rel ][ $sig ] ?? 0 ) + 1;
@@ -295,7 +500,7 @@ function apply_baseline( array $data, string $root, string $path ): array {
 		if ( empty( $info['messages'] ) ) {
 			continue;
 		}
-		$rel  = ltrim( str_replace( $root, '', $file ), '/' );
+		$rel  = baseline_relpath( $file, $root );
 		$kept = array();
 		foreach ( $info['messages'] as $m ) {
 			$sig = baseline_signature( $m );
@@ -1241,13 +1446,20 @@ function render_table( array $components, bool $collapse = true ): void {
  * @return array<string,string>
  */
 function parse_opts( array $argv ): array {
-	$opts = array();
+	$opts  = array();
+	$paths = array();
 	foreach ( array_slice( $argv, 1 ) as $arg ) {
 		if ( preg_match( '/^--([a-z0-9_-]+)=(.*)$/i', $arg, $m ) ) {
+			if ( 'path' === $m[1] ) {
+				$paths[] = $m[2]; // Accumulate repeated --path rather than overwrite.
+			}
 			$opts[ $m[1] ] = $m[2];
 		} elseif ( preg_match( '/^--([a-z0-9_-]+)$/i', $arg, $m ) ) {
 			$opts[ $m[1] ] = '1';
 		}
+	}
+	if ( count( $paths ) > 1 ) {
+		$opts['path'] = $paths; // Multiple --path: hand the full list to resolve_scan_paths().
 	}
 	return $opts;
 }
@@ -1283,10 +1495,24 @@ function apply_config( array $cli ): array {
 	}
 
 	$allowed = array(
-		'php', 'wp', 'since', 'path', 'format', 'fail-on', 'ignore-on',
+		'php', 'wp', 'since', 'path', 'paths', 'format', 'fail-on', 'ignore-on',
 		'parallel', 'cache', 'ignore', 'only', 'top', 'baseline',
 		'no-default-ignore', 'no-collapse', 'no-cache', 'all',
 	);
+
+	// Warn (don't fail) on unrecognised keys so a typo'd key — which would
+	// silently change the scan scope — is visible instead of a no-op.
+	foreach ( array_keys( $config ) as $key ) {
+		if ( ! in_array( $key, $allowed, true ) ) {
+			fwrite( STDERR, "warning: unknown key '$key' in $path (ignored)\n" );
+		}
+	}
+
+	// CLI paths win wholesale over config paths (don't merge the two sources).
+	if ( isset( $cli['path'] ) || isset( $cli['paths'] ) ) {
+		unset( $config['path'], $config['paths'] );
+	}
+
 	foreach ( $allowed as $key ) {
 		if ( isset( $cli[ $key ] ) || ! array_key_exists( $key, $config ) ) {
 			continue; // CLI wins; skip keys the config doesn't set.
@@ -1357,7 +1583,10 @@ function detect_cpu_count(): int {
 function build_ignore_patterns( array $opts ): string {
 	$patterns = array();
 	if ( ! isset( $opts['no-default-ignore'] ) ) {
-		$patterns = array( '*/vendor/*', '*/node_modules/*', '*/build/*', '*/dist/*', '*.min.php', '*/tests/*' );
+		// *.blade.php are scanned by phpcs (the extension ends in .php) but hold no
+		// PHP — skipping them keeps Blade/Sage themes clean out of the box (Twig is
+		// not a .php extension, so it is never scanned in the first place).
+		$patterns = array( '*/vendor/*', '*/node_modules/*', '*/build/*', '*/dist/*', '*.min.php', '*/tests/*', '*.blade.php' );
 	}
 	if ( isset( $opts['ignore'] ) && '' !== $opts['ignore'] && '1' !== $opts['ignore'] ) {
 		foreach ( explode( ',', $opts['ignore'] ) as $p ) {

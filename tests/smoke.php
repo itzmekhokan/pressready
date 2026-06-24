@@ -101,5 +101,43 @@ $t = tally_of( $bin, '--config=' . escapeshellarg( $cfg ) . ' --path=tests/fixtu
 @unlink( $cfg );
 check( 6 === ( $t['wp'] ?? null ), 'config file supplies --wp and --no-default-ignore (got ' . json_encode( $t ) . ')' );
 
+// 12. Scanning zero files exits 2 (a CI gate must fail loudly, not pass vacuously).
+$empty = sys_get_temp_dir() . '/pressready-smoke-empty-' . getmypid();
+@mkdir( $empty );
+file_put_contents( $empty . '/notes.txt', "no php here\n" );
+exec( "$bin --php=8.4 --path=" . escapeshellarg( $empty ) . " --format=summary > /dev/null 2>&1", $_o4, $rc4 );
+check( 2 === $rc4, 'zero files scanned exits 2 (no vacuous pass)' );
+@unlink( $empty . '/notes.txt' );
+@rmdir( $empty );
+
+// 13. Internal.NoCodeFound (a Blade template) is not counted as a deprecation.
+// (--no-default-ignore forces the .blade.php to be scanned; the artefact is stripped.)
+$t = tally_of( $bin, '--php=8.4 --wp=6.9 --path=tests/fixtures/template.blade.php' );
+check( 0 === ( $t['total'] ?? null ), 'Blade NoCodeFound is stripped, not counted (got ' . json_encode( $t ) . ')' );
+
+// 14. --help and -h print usage and exit 0.
+exec( "$bin --help 2>&1", $help_out, $rc5 );
+check(
+	0 === $rc5 && false !== strpos( implode( "\n", $help_out ), 'Usage:' ),
+	'--help prints usage and exits 0'
+);
+exec( "$bin -h > /dev/null 2>&1", $_o6, $rc6 );
+check( 0 === $rc6, '-h exits 0' );
+
+// 15. Repeated --path merges all targets (rather than keeping only the last).
+$t = tally_of( $bin, '--wp=6.9 --path=tests/fixtures/upgrade.php --path=tests/fixtures/sample.php' );
+$single = tally_of( $bin, '--wp=6.9 --path=tests/fixtures/sample.php' );
+check(
+	( $t['total'] ?? 0 ) > ( $single['total'] ?? 0 ),
+	'repeated --path merges targets, not last-wins (got ' . json_encode( $t ) . ')'
+);
+
+// 16. An unknown config key warns on stderr (typo'd keys must not be silent).
+$badcfg = sys_get_temp_dir() . '/pressready-smoke-badkey.json';
+file_put_contents( $badcfg, json_encode( array( 'wp' => '6.9', 'exclud' => array( 'x' ) ) ) );
+$warn = shell_exec( "$bin --config=" . escapeshellarg( $badcfg ) . " --path=tests/fixtures/sample.php --no-default-ignore --format=summary 2>&1 1>/dev/null" );
+@unlink( $badcfg );
+check( false !== strpos( (string) $warn, "unknown key 'exclud'" ), 'unknown config key warns on stderr' );
+
 echo $failures ? "\nSMOKE FAILED ($failures)\n" : "\nALL SMOKE TESTS PASSED\n";
 exit( $failures ? 1 : 0 );

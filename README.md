@@ -26,6 +26,7 @@
 - [WP-CLI](#wp-cli)
 - [GitHub Actions / CI](#github-actions--ci)
 - [Baseline (legacy sites)](#baseline-legacy-sites)
+- [Exit codes](#exit-codes)
 - [Per-finding suppression](#per-finding-suppression)
 - [Roadmap](#roadmap)
 
@@ -149,6 +150,10 @@ vendor/bin/pressready --wp=6.9 --since=6.4 --path=wp-content
 # Scan a single plugin or theme.
 vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content/plugins/woocommerce
 
+# Scan just your own code (theme + brand mu-plugins), skipping third-party plugins.
+vendor/bin/pressready --php=8.4 --wp=6.9 \
+  --path=wp-content/themes/acme --path=wp-content/mu-plugins/acme
+
 # PHP upgrade path — everything that breaks across 8.1 → 8.4.
 vendor/bin/pressready --php=8.1-8.4 --path=wp-content
 ```
@@ -169,7 +174,7 @@ On a large `wp-content` the report leads with a **fix-first block** — every `f
 | `--php=<ver>` | Target PHP version or range, e.g. `8.4` or `8.1-8.4` |
 | `--wp=<ver>` | Target WordPress version, e.g. `6.9` |
 | `--since=<ver>` | With `--wp`: show only what newly deprecates upgrading from this version |
-| `--path=<dir>` | Directory to scan (default: cwd) |
+| `--path=<dir>` | Path to scan (default: cwd). **Repeatable** — pass `--path` more than once, or a comma list, to scan several targets in one pass |
 | `--format=<fmt>` | Output format — see [Output formats](#output-formats) |
 | `--fail-on=<lvl>` | Exit non-zero when findings at/above this level exist: `fatal` · `risky` · `deprecated` |
 | `--ignore-on=<lvl>` | Hide findings at/below this level (the inverse of `--fail-on`): `fatal` · `risky` · `deprecated` |
@@ -177,7 +182,8 @@ On a large `wp-content` the report leads with a **fix-first block** — every `f
 | `--cache[=<file>]` | Cache results so re-scans only reprocess changed files |
 | `--no-cache` | Force a fresh scan even when `--cache` is set |
 | `--ignore=<patterns>` | Extra comma-separated path patterns to skip |
-| `--no-default-ignore` | Disable built-in ignores (`vendor`, `node_modules`, `build`, `dist`, `*.min.php`, `tests`) |
+| `--no-default-ignore` | Disable built-in ignores (`vendor`, `node_modules`, `build`, `dist`, `*.min.php`, `tests`, `*.blade.php`) |
+| `-h`, `--help` | Print the usage / flag reference and exit |
 | `--only=<needle>` | Show only components whose name matches this substring |
 | `--top=N` | Show only the N worst components (most fatals first) |
 | `--no-collapse` | Show one line per finding instead of collapsing duplicates |
@@ -254,6 +260,7 @@ Commit shared defaults to a `.pressready.json` in your project root — CLI flag
     "php": "8.4",
     "wp": "6.9",
     "fail-on": "fatal",
+    "paths": ["wp-content/themes/acme", "wp-content/mu-plugins/acme"],
     "ignore": ["*/cache/*", "*/languages/*"],
     "top": 20
 }
@@ -263,6 +270,8 @@ Commit shared defaults to a `.pressready.json` in your project root — CLI flag
 vendor/bin/pressready --path=wp-content              # picks up .pressready.json automatically
 vendor/bin/pressready --config=ci/pressready.json    # or point at a specific file
 ```
+
+Recognised keys mirror the flags (use `paths: []` for multiple scan targets). **Unknown keys are reported as a warning** so a typo doesn't silently change your scan scope. CLI flags always override the file — passing any `--path` on the command line replaces the config's `path`/`paths` entirely.
 
 ---
 
@@ -371,6 +380,22 @@ vendor/bin/pressready --php=8.4 --wp=6.9 --baseline --fail-on=fatal --path=wp-co
 ```
 
 Findings are keyed by `path → signature` (sniff code + message with line numbers neutralised), so the baseline survives line shifts and reordering. Use `--baseline=<file>` / `--generate-baseline=<file>` to store the baseline at a custom path.
+
+Paths are normalised **relative to the directory you run from** (your repo root), so a baseline generated locally matches one generated in CI regardless of whether `--path` was absolute, relative, or scoped to a subdirectory. Run `generate-baseline` and `--baseline` from the same working directory (the repo root) and the keys line up.
+
+---
+
+## Exit codes
+
+CI gates can rely on a stable exit-code contract:
+
+| Code | Meaning |
+|---|---|
+| `0` | Clean — no findings, or none at/above the `--fail-on` threshold |
+| `1` | Findings at/above the `--fail-on` threshold (`fatal` / `risky` / `deprecated`) |
+| `2` | Usage / config error — bad flag, a `--path` that doesn't exist, or **zero files scanned** |
+
+Without `--fail-on`, the scan reports findings but exits `0`. Exit `2` is deliberately distinct from `1`: scanning zero files (a misconfigured path or over-broad `--ignore`) fails as a config error rather than passing vacuously, so a broken gate goes red instead of green.
 
 ---
 
