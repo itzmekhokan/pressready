@@ -1,0 +1,55 @@
+name: PressReady Compatibility Gate
+description: Static PHP/WordPress upgrade-readiness scan (PHPCompatibility + WP deprecations).
+author: itzmekhokan
+branding:
+  icon: shield
+  color: blue
+inputs:
+  config:
+    description: Path to .pressready.json (target PHP/WP + paths). Read from the consumer checkout. Ignored if the file is absent.
+    required: false
+    default: .pressready.json
+  baseline:
+    description: Path to a baseline file. The gate then fails only on findings not present in the baseline.
+    required: false
+    default: ''
+  fail-on:
+    description: Severity threshold that fails the build (fatal | risky | deprecated).
+    required: false
+    default: fatal
+  format:
+    description: Output format (github | grouped | table | summary | json | sarif).
+    required: false
+    default: github
+  php:
+    description: Override target PHP version or range (else taken from config), e.g. 8.4 or 8.1-8.4.
+    required: false
+    default: ''
+  wp:
+    description: Override target WP version (else taken from config), e.g. 6.9.
+    required: false
+    default: ''
+  working-directory:
+    description: Directory to scan from, relative to the checkout (defaults to repo root).
+    required: false
+    default: '.'
+outputs:
+  exit-code:
+    description: PressReady exit code (0 clean, 1 findings at/above threshold, 2 usage/config error).
+runs:
+  using: docker
+  # Pre-built image pulled from GHCR so consumers never rebuild. During local
+  # development you can point this at the Dockerfile instead: image: 'Dockerfile'.
+  image: docker://ghcr.io/itzmekhokan/pressready:1
+  # Inputs are passed positionally, not via INPUT_* env vars: a Docker action
+  # entrypoint runs under /bin/sh (dash), which silently drops env vars whose
+  # names contain dashes (INPUT_FAIL-ON, INPUT_WORKING-DIRECTORY). Positional
+  # args are shell-independent. Order MUST match entrypoint.sh.
+  args:
+    - ${{ inputs.config }}
+    - ${{ inputs.baseline }}
+    - ${{ inputs.fail-on }}
+    - ${{ inputs.format }}
+    - ${{ inputs.php }}
+    - ${{ inputs.wp }}
+    - ${{ inputs.working-directory }}

@@ -365,6 +365,18 @@ wp pressready scan --php=8.4 <span class="k">--format=csv</span></pre>
   <div class="wrap">
     <h2>Baseline &amp; CI</h2>
     <p class="lede">Adopt Pressready on a legacy site without drowning in pre-existing findings — snapshot today's known issues, then fail CI only on new ones.</p>
+
+    <p style="font-weight:600;margin:0 0 8px;font-size:15px">GitHub Action <span class="pill done">recommended</span></p>
+    <p style="color:var(--muted);font-size:14.5px;margin:0 0 10px">The published Docker action bakes Pressready <strong>and</strong> its PHPCS 4.x toolchain into the image, so your repo carries no Composer boilerplate and can't clash with a project's own <code>squizlabs/php_codesniffer ^3.x</code> pin. A whole CI gate becomes two lines — <code>.pressready.json</code> and the baseline stay repo-local.</p>
+    <pre><span class="k">- uses:</span> actions/checkout@v4
+<span class="k">- uses:</span> itzmekhokan/pressready@v1
+  <span class="k">with:</span>
+    baseline: .pressready-baseline.json
+    fail-on: fatal
+    format: github</pre>
+    <p style="margin:10px 0 22px;color:var(--muted);font-size:14.5px">Inputs: <code>config</code> (default <code>.pressready.json</code>) · <code>baseline</code> · <code>fail-on</code> (<code>fatal</code>·<code>risky</code>·<code>deprecated</code>) · <code>format</code> · <code>php</code> · <code>wp</code> · <code>working-directory</code>. Output: <code>exit-code</code>. Pin <code>@v1</code> for the moving major tag or <code>@v1.4.0</code> for an immutable release; the image is pulled pre-built from <code>ghcr.io/itzmekhokan/pressready</code>.</p>
+
+    <p style="font-weight:600;margin:0 0 8px;font-size:15px">Or run the binary yourself</p>
     <div class="two-col">
       <div>
         <p style="font-weight:600;margin:0 0 8px;font-size:15px">Standalone CLI</p>
@@ -414,7 +426,8 @@ get_postdata( 1 ); <span class="k">// phpcs:ignore Pressready.WordPress.Deprecat
       <tr><td>4</td><td>Per-component attribution, baseline, <code>--format=github</code>, inline suppression</td><td><span class="pill done">done</span></td></tr>
       <tr><td>5</td><td><code>wp pressready scan</code> WP-CLI command (before_wp_load, all formats, <code>--fail-on</code>)</td><td><span class="pill done">done</span></td></tr>
       <tr><td>6</td><td>Enterprise scale: parallel scanning, result cache, path ignores, duplicate collapsing, <code>--only</code>/<code>--top</code>, <code>.pressready.json</code> config, SARIF output, PHP version ranges, docblock-driven dataset coverage</td><td><span class="pill done">done</span></td></tr>
-      <tr><td>7+</td><td>DataViews admin report; fix-hint links; Update Safety Net (sequel); WP.org distribution</td><td><span class="pill plan">planned</span></td></tr>
+      <tr><td>7</td><td>Docker GitHub Action (<code>ghcr.io</code> image, <code>@v1</code>) — one-line CI adoption with the PHPCS toolchain baked into the image</td><td><span class="pill done">done</span></td></tr>
+      <tr><td>8+</td><td>DataViews admin report; fix-hint links; Update Safety Net (sequel); WP.org distribution</td><td><span class="pill plan">planned</span></td></tr>
     </table>
   </div>
 </section>

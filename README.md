@@ -313,7 +313,72 @@ All standalone CLI flags (`--ignore-on`, `--parallel`, `--cache`, `--ignore`, `-
 
 ## GitHub Actions / CI
 
-### Inline PR annotations
+### Recommended: the `itzmekhokan/pressready@v1` action
+
+The published Docker action bakes Pressready **and** its PHPCS 4.x toolchain into
+the image, so your repo carries no Composer boilerplate and there is no chance of
+clashing with a project's own `squizlabs/php_codesniffer ^3.13` pin. A whole CI
+gate reduces to:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: itzmekhokan/pressready@v1
+  with:
+    baseline: .pressready-baseline.json
+    fail-on: fatal
+    format: github
+```
+
+`.pressready.json` and the baseline stay repo-local — they're read from your
+checkout, so per-repo scope (target PHP/WP + `paths`) is unchanged.
+
+#### Inputs
+
+| Input | Default | Description |
+|---|---|---|
+| `config` | `.pressready.json` | Path to the config file. Ignored if absent (the CLI auto-discovers `.pressready.json` from the checkout). |
+| `baseline` | — | Path to a baseline file. The gate then fails only on findings **not** in the baseline. |
+| `fail-on` | `fatal` | Severity threshold that fails the build: `fatal`, `risky`, or `deprecated`. |
+| `format` | `github` | Output format: `github`, `grouped`, `table`, `summary`, `json`, `sarif`. |
+| `php` | — | Override the target PHP version/range (else taken from config), e.g. `8.4` or `8.1-8.4`. |
+| `wp` | — | Override the target WP version (else taken from config), e.g. `6.9`. |
+| `working-directory` | `.` | Directory to scan from, relative to the checkout. |
+
+#### Output
+
+| Output | Description |
+|---|---|
+| `exit-code` | Pressready exit code: `0` clean, `1` findings at/above the threshold, `2` usage/config error. |
+
+Minimal `.github/workflows/pressready.yml`:
+
+```yaml
+name: PressReady
+on: [ pull_request ]
+permissions:
+  contents: read
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: itzmekhokan/pressready@v1
+        with:
+          baseline: .pressready-baseline.json
+          fail-on: fatal
+          format: github
+```
+
+> Pin to `@v1` for the moving major tag, or `@v1.0.0` for an immutable release.
+> The image is published to `ghcr.io/itzmekhokan/pressready` and pulled pre-built,
+> so runs don't rebuild it.
+
+### Raw CLI recipes
+
+If you'd rather run the binary yourself (e.g. you already install Pressready via
+Composer in an isolated `tools/` project), these recipes still apply.
+
+#### Inline PR annotations
 
 ```yaml
 - name: Pressready scan
@@ -324,7 +389,7 @@ All standalone CLI flags (`--ignore-on`, `--parallel`, `--cache`, `--ignore`, `-
       --format=github
 ```
 
-### Fail the build on fatals
+#### Fail the build on fatals
 
 ```yaml
 - name: Pressready scan
@@ -336,7 +401,7 @@ All standalone CLI flags (`--ignore-on`, `--parallel`, `--cache`, `--ignore`, `-
       --cache
 ```
 
-### Upload SARIF to GitHub Advanced Security
+#### Upload SARIF to GitHub Advanced Security
 
 ```yaml
 - name: Pressready scan
@@ -352,7 +417,7 @@ All standalone CLI flags (`--ignore-on`, `--parallel`, `--cache`, `--ignore`, `-
     sarif_file: pressready.sarif
 ```
 
-### Baseline: fail only on new findings
+#### Baseline: fail only on new findings
 
 ```yaml
 - name: Pressready scan
@@ -420,7 +485,8 @@ get_postdata( 1 );                      // phpcs:ignore Pressready.WordPress.Dep
 | 4 | Per-component attribution, baseline, `--format=github`, inline suppression | ✅ done |
 | 5 | `wp pressready scan` WP-CLI command | ✅ done |
 | 6 | Enterprise scale: parallel, cache, path ignores, duplicate collapsing, `--only`/`--top`, config file, SARIF, PHP ranges, docblock dataset coverage | ✅ done |
-| 7+ | DataViews admin report; fix-hint links; WP.org distribution | planned |
+| 7 | Docker GitHub Action (`ghcr.io` image, `@v1`) — one-line CI adoption with the PHPCS toolchain baked into the image | ✅ done |
+| 8+ | DataViews admin report; fix-hint links; WP.org distribution | planned |
 
 ---
 
