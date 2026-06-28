@@ -238,6 +238,13 @@ if ( extension_loaded( 'Phar' ) ) {
 			1 === ( $t['fatal'] ?? null ) && 2 === ( $t['wp'] ?? null ),
 			'pressready.phar builds and scans self-contained (got ' . json_encode( $t ) . ')'
 		);
+		// The build stamps a VERSION file so the phar reports a real version
+		// (it has no git tree / Composer metadata to resolve from at runtime).
+		$pv = trim( (string) shell_exec( $phar_php . ' ' . escapeshellarg( $phar_out ) . ' --version 2>/dev/null' ) );
+		check(
+			1 === preg_match( '/^pressready v\d/', $pv ) && false === strpos( $pv, 'unknown' ),
+			'pressready.phar reports its stamped version (got ' . $pv . ')'
+		);
 		@unlink( $phar_out );
 	} else {
 		check( false, 'pressready.phar build failed (exit ' . $brc . ')' );

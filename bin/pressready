@@ -323,13 +323,24 @@ function main( array $argv ): void {
  * Resolve the running version. There is no hardcoded version constant —
  * releases are git-tag driven — so resolve it at runtime, most-authoritative first:
  *
- *   1. Composer's runtime API when installed as a dependency (the released tag).
- *   2. `git describe --tags` in a dev checkout.
- *   3. A final "unknown" fallback (e.g. inside the PHAR without a git tree).
+ *   1. The VERSION file the phar build stamps in (a phar has no git tree or
+ *      Composer metadata, so this is how the distributable knows its version).
+ *   2. Composer's runtime API when installed as a dependency (the released tag).
+ *   3. `git describe --tags` in a dev checkout.
+ *   4. A final "unknown" fallback.
  *
  * @return string
  */
 function pressready_version(): string {
+	// Stamped by bin/build-phar.php; present only inside the built phar.
+	$stamp = dirname( __DIR__ ) . '/VERSION';
+	if ( is_file( $stamp ) ) {
+		$v = trim( (string) file_get_contents( $stamp ) );
+		if ( '' !== $v ) {
+			return $v;
+		}
+	}
+
 	if ( class_exists( '\Composer\InstalledVersions' ) ) {
 		try {
 			$v = \Composer\InstalledVersions::getPrettyVersion( 'itzmekhokan/pressready' );
