@@ -121,6 +121,7 @@
     <a href="#severity">Severity</a>
     <a href="#install">Install</a>
     <a href="#quickstart">Quick start</a>
+    <a href="#matrix">Matrix</a>
     <a href="#wpcli">WP-CLI</a>
     <a href="#baseline">Baseline &amp; CI</a>
     <a href="#roadmap">Roadmap</a>
@@ -155,7 +156,7 @@
       <div class="feat">
         <div class="dot">⊕</div>
         <h3>WP axis — custom sniff + dataset</h3>
-        <p>A custom PHPCS sniff driven by an authoritative, regenerable JSON dataset of <em>every</em> WordPress core deprecation — extracted straight from core's own <code>_deprecated_*</code> annotations. 641 calls → 602 unique entries covering functions, methods, classes, hooks, files, and arguments back to WordPress 1.5.</p>
+        <p>A custom PHPCS sniff driven by an authoritative, regenerable JSON dataset of <em>every</em> WordPress core deprecation — extracted straight from core's own <code>_deprecated_*</code> annotations and <code>@deprecated</code> docblocks. Hundreds of unique entries covering functions, methods, classes, hooks, and files back to WordPress 1.5.</p>
       </div>
     </div>
     <p style="margin-top:20px;color:var(--muted);font-size:14.5px">The dataset is regenerable against any <code>wordpress-develop</code> checkout: <code>php bin/gen-wp-deprecations.php --src=/path/to/wordpress-develop/src --out=data/wp-deprecations.json</code>. Re-run each WordPress release to refresh for free.</p>
@@ -168,20 +169,32 @@
     <p class="lede">Every finding is classified into one tier. The verdict and <code>--fail-on</code> key on true fatals only, so the report never cries wolf.</p>
     <table class="sev-table">
       <tr><th>Level</th><th>Meaning</th><th>Source</th></tr>
-      <tr><td><span class="sev fatal">fatal</span></td><td>PHP symbol <strong>removed</strong> by the target version → call to undefined → white screen</td><td>PHPCompatibility (message says "removed since PHP")</td></tr>
+      <tr><td><span class="sev fatal">fatal</span></td><td>A symbol <strong>removed</strong> by the target version — a PHP symbol gone, or a WordPress core API removed by the target WP version → call to undefined → white screen</td><td>PHPCompatibility · Pressready sniff (message says "removed since")</td></tr>
       <tr><td><span class="sev risky">risky</span></td><td>Behavioural / correctness change that still runs but may produce wrong results</td><td>Other PHPCompatibility errors</td></tr>
       <tr><td><span class="sev php">php</span></td><td>PHP feature <strong>deprecated</strong> (not yet removed) by the target version</td><td>PHPCompatibility warnings</td></tr>
-      <tr><td><span class="sev wp">wp</span></td><td>WordPress core API deprecated by the target WP version</td><td>Pressready sniff</td></tr>
+      <tr><td><span class="sev wp">wp</span></td><td>WordPress core API deprecated (but still shimmed) by the target WP version</td><td>Pressready sniff</td></tr>
     </table>
+    <p style="margin-top:16px;color:var(--muted);font-size:14.5px">The WP dataset records the WordPress version it was generated from. Target a <code>--wp</code> newer than the dataset and Pressready warns on stderr (results may be incomplete — regenerate) rather than imply a clean bill of health. Point a run at a custom or newer dataset with <code>PRESSREADY_DATASET=/path/to/wp-deprecations.json</code>.</p>
   </div>
 </section>
 
 <section id="install" style="background:#fff;border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
   <div class="wrap">
     <h2>Install</h2>
-    <p class="lede">Pressready is a Composer dev tool. It registers the <code>Pressready</code> PHPCS standard automatically via <code>dealerdirect/phpcodesniffer-composer-installer</code>. It installs in two tiers depending on how new a PHP version you need to target.</p>
+    <p class="lede">Run the single-file PHAR for zero-setup use anywhere, or install via Composer to pin it per project.</p>
 
-    <h3 style="margin-top:8px">Default — no config (PHP &le; 8.1)</h3>
+    <h3 style="margin-top:8px">Standalone PHAR — no Composer</h3>
+    <p style="color:var(--muted);font-size:14.5px">A single self-contained file that bundles the whole PHPCS toolchain — nothing to <code>composer install</code>, and <strong>no chance of clashing with a project's own pinned <code>squizlabs/php_codesniffer</code></strong>. Ideal for CI, a server, or a project you don't want to add a dev dependency to.</p>
+    <pre><span class="c"># Download the latest release and run it</span>
+curl -L https://github.com/itzmekhokan/pressready/releases/latest/download/pressready.phar -o pressready.phar
+chmod +x pressready.phar
+./pressready.phar <span class="k">--php=8.4 --wp=6.9</span> --path=wp-content</pre>
+    <p style="margin-top:12px;color:var(--muted);font-size:14.5px">On first run it extracts its bundled toolchain to a cache dir; later runs reuse it. Every flag works exactly as the Composer-installed CLI.</p>
+
+    <h3 style="margin-top:24px">Composer</h3>
+    <p style="color:var(--muted);font-size:14.5px">Installs the <code>Pressready</code> PHPCS standard automatically via <code>dealerdirect/phpcodesniffer-composer-installer</code>, in two tiers depending on how new a PHP version you need to target.</p>
+
+    <h3 style="margin-top:16px">Default — no config (PHP &le; 8.1)</h3>
     <p style="color:var(--muted);font-size:14.5px">The standard install needs <strong>no stability config</strong>. It pulls the stable PHPCompatibility engine, which detects everything up to <strong>PHP 8.1</strong> plus the full WordPress deprecations axis. Most sites can stop here.</p>
     <pre><span class="c"># Add to your project as a dev dependency</span>
 composer require --dev itzmekhokan/pressready</pre>
@@ -253,6 +266,9 @@ vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--format=sarif</span> -
 <span class="c"># A PHP upgrade path — everything that breaks across 8.1 → 8.4.</span>
 vendor/bin/pressready <span class="k">--php=8.1-8.4</span> --path=.
 
+<span class="c"># Compatibility matrix — how far can I safely upgrade, and what breaks first?</span>
+vendor/bin/pressready --php=7.4-8.4 <span class="k">--matrix</span> --path=.
+
 <span class="c"># Deprecations are hidden by default — add --all to list the full tail.</span>
 vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--all</span> --path=.
 
@@ -263,6 +279,33 @@ vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--ignore-on=deprecated<
       <code>--fail-on</code>: <code>fatal</code> · <code>risky</code> · <code>deprecated</code> &nbsp;·&nbsp; <code>--ignore-on</code>: hide findings at/below a level (the inverse)<br>
       <code>--path</code> is repeatable (or a comma list) to scan several targets in one pass · <code>-h</code>/<code>--help</code> prints the full flag reference.<br>
       <strong>Exit codes:</strong> <code>0</code> clean · <code>1</code> findings at/above <code>--fail-on</code> · <code>2</code> usage/config error (bad flag, missing path, or zero files scanned — a gate fails loudly instead of passing vacuously).
+    </p>
+  </div>
+</section>
+
+<section id="matrix">
+  <div class="wrap">
+    <h2>Compatibility matrix</h2>
+    <p class="lede">Instead of "does this one target break my site?", <code>--matrix</code> answers the question every site owner actually has — <strong>how far can I safely upgrade, and what's the first thing that breaks?</strong> It grades each version in the requested span from a single scan.</p>
+    <pre>vendor/bin/pressready <span class="k">--php=7.4-8.4 --matrix</span> --path=wp-content
+
+  Pressready — compatibility matrix — PHP 7.4–8.4
+  Scanned: wp-content
+
+  PHP
+    7.4    <span style="color:#5ad17f">✓ clear</span>
+    8.0    <span style="color:#ff8d8d">✗ 1 fatal</span>
+    8.1    <span style="color:#ff8d8d">✗ 1 fatal</span>
+    8.2    <span style="color:#ff8d8d">✗ 1 fatal</span>
+    8.3    <span style="color:#ff8d8d">✗ 1 fatal</span>
+    8.4    <span style="color:#ff8d8d">✗ 1 fatal</span>
+
+  <span style="color:#5ad17f">✓ Safe through PHP 7.4.</span>
+  <span style="color:#ff8d8d">✗ First break: PHP 8.0 (1 fatal).</span></pre>
+    <p style="margin-top:16px;color:var(--muted);font-size:14.5px">
+      Pass a <strong>range</strong> (<code>--php=7.4-8.4</code>) to grade across it; a single <code>--php=8.4</code> grades just that version.
+      <code>--format=json</code> emits the per-version grid plus <code>safe_through</code> / <code>first_break</code> for each axis, so CI can consume the ceiling.
+      <code>--fail-on</code> is honoured — a span containing a fatal exits non-zero. The WordPress axis is graded too, and lights up as the dataset gains removal data.
     </p>
   </div>
 </section>
@@ -374,7 +417,7 @@ wp pressready scan --php=8.4 <span class="k">--format=csv</span></pre>
     baseline: .pressready-baseline.json
     fail-on: fatal
     format: github</pre>
-    <p style="margin:10px 0 22px;color:var(--muted);font-size:14.5px">Inputs: <code>config</code> (default <code>.pressready.json</code>) · <code>baseline</code> · <code>fail-on</code> (<code>fatal</code>·<code>risky</code>·<code>deprecated</code>) · <code>format</code> · <code>php</code> · <code>wp</code> · <code>working-directory</code>. Output: <code>exit-code</code>. Pin <code>@v1</code> for the moving major tag or <code>@v1.4.0</code> for an immutable release; the image is pulled pre-built from <code>ghcr.io/itzmekhokan/pressready</code>.</p>
+    <p style="margin:10px 0 22px;color:var(--muted);font-size:14.5px">Inputs: <code>config</code> (default <code>.pressready.json</code>) · <code>baseline</code> · <code>fail-on</code> (<code>fatal</code>·<code>risky</code>·<code>deprecated</code>) · <code>format</code> · <code>php</code> · <code>wp</code> · <code>working-directory</code>. Output: <code>exit-code</code>. Pin <code>@v1</code> for the moving major tag or <code>@v1.5.0</code> for an immutable release; the image is pulled pre-built from <code>ghcr.io/itzmekhokan/pressready</code>.</p>
 
     <p style="font-weight:600;margin:0 0 8px;font-size:15px">Or run the binary yourself</p>
     <div class="two-col">
@@ -427,7 +470,8 @@ get_postdata( 1 ); <span class="k">// phpcs:ignore Pressready.WordPress.Deprecat
       <tr><td>5</td><td><code>wp pressready scan</code> WP-CLI command (before_wp_load, all formats, <code>--fail-on</code>)</td><td><span class="pill done">done</span></td></tr>
       <tr><td>6</td><td>Enterprise scale: parallel scanning, result cache, path ignores, duplicate collapsing, <code>--only</code>/<code>--top</code>, <code>.pressready.json</code> config, SARIF output, PHP version ranges, docblock-driven dataset coverage</td><td><span class="pill done">done</span></td></tr>
       <tr><td>7</td><td>Docker GitHub Action (<code>ghcr.io</code> image, <code>@v1</code>) — one-line CI adoption with the PHPCS toolchain baked into the image</td><td><span class="pill done">done</span></td></tr>
-      <tr><td>8+</td><td>DataViews admin report; fix-hint links; Update Safety Net (sequel); WP.org distribution</td><td><span class="pill plan">planned</span></td></tr>
+      <tr><td>8</td><td>v1.5: compatibility matrix (<code>--matrix</code>); WordPress removed-by-target findings are fatal + dataset-version awareness; single-file <code>pressready.phar</code> distributable</td><td><span class="pill done">done</span></td></tr>
+      <tr><td>9+</td><td>Cross-version <code>removed</code> data; pre-commit hook &amp; GitLab CI; DataViews admin report; WP.org distribution</td><td><span class="pill plan">planned</span></td></tr>
     </table>
   </div>
 </section>
