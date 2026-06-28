@@ -246,5 +246,29 @@ if ( extension_loaded( 'Phar' ) ) {
 	echo "  – phar build test skipped (ext-phar not loaded)\n";
 }
 
+// 28. The dual-mode Docker entrypoint: under GitHub Actions the 7 positional
+// inputs build the github-mode flags; everywhere else (pre-commit / docker run)
+// args pass straight through to the CLI. A stub `pressready` on PATH captures
+// the resolved invocation so a future edit can't silently break action mode.
+$stub = sys_get_temp_dir() . '/pressready-entry-' . getmypid();
+@mkdir( $stub );
+file_put_contents( $stub . '/pressready', "#!/bin/sh\necho \"called: \$*\"\n" );
+chmod( $stub . '/pressready', 0755 );
+$entry = escapeshellarg( getcwd() . '/entrypoint.sh' );
+// Force CLI mode by clearing GITHUB_ACTIONS — CI itself sets it to "true" for
+// every step, which would otherwise push this invocation into action mode.
+$cli = (string) shell_exec( 'GITHUB_ACTIONS= PATH=' . escapeshellarg( $stub ) . ':$PATH sh ' . $entry . ' --php=8.4 --wp=6.9 --path=wp-content 2>&1' );
+check(
+	false !== strpos( $cli, 'called: --php=8.4 --wp=6.9 --path=wp-content' ),
+	'entrypoint CLI mode passes args straight through (got ' . trim( $cli ) . ')'
+);
+$act = (string) shell_exec( 'PATH=' . escapeshellarg( $stub ) . ':$PATH GITHUB_ACTIONS=true GITHUB_WORKSPACE=' . escapeshellarg( $stub ) . ' sh ' . $entry . " '' '' fatal github 8.4 6.9 . 2>&1" );
+check(
+	false !== strpos( $act, 'called: --format=github --fail-on=fatal --php=8.4 --wp=6.9' ),
+	'entrypoint action mode still builds the github-format flags (got ' . trim( $act ) . ')'
+);
+@unlink( $stub . '/pressready' );
+@rmdir( $stub );
+
 echo $failures ? "\nSMOKE FAILED ($failures)\n" : "\nALL SMOKE TESTS PASSED\n";
 exit( $failures ? 1 : 0 );

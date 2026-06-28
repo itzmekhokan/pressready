@@ -1,0 +1,23 @@
+# Pressready pre-commit hook — static PHP/WordPress upgrade-readiness scan.
+#
+# Add to your project's .pre-commit-config.yaml:
+#
+#   repos:
+#     - repo: https://github.com/itzmekhokan/pressready
+#       rev: v1.6.0
+#       hooks:
+#         - id: pressready
+#           args: [--php=8.4, --wp=6.9, --path=wp-content]
+#
+# Or omit `args` and commit a .pressready.json with the targets — it is
+# auto-discovered from the repo root.
+#
+# Runs via the published Docker image (the PHPCS toolchain is baked in), so it
+# needs no local PHP or Composer — only Docker, which pre-commit manages.
+- id: pressready
+  name: Pressready upgrade-readiness scan
+  description: Scan staged PHP for deprecated/removed PHP & WordPress core APIs before committing.
+  entry: ghcr.io/itzmekhokan/pressready:1
+  language: docker_image
+  files: \.php$
+  pass_filenames: false
