@@ -1,0 +1,87 @@
+name: Bump Homebrew formula
+
+# After a release publishes (and the build-and-push workflow has attached
+# pressready.phar to it), update the itzmekhokan/homebrew-pressready tap with the
+# new release URL + sha256 and open a bump PR there. Manual dispatch can target
+# any existing tag.
+#
+# Requires repo secret HOMEBREW_TAP_TOKEN: a PAT with `contents: write` +
+# `pull-requests: write` on itzmekhokan/homebrew-pressready (the built-in
+# GITHUB_TOKEN can't push to a different repository).
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to bump the formula to (e.g. v1.6.0)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve target tag
+        id: tag
+        run: echo "tag=${{ github.event.release.tag_name || inputs.tag }}" >> "$GITHUB_OUTPUT"
+
+      # The phar is attached by a parallel job on the tag push, so on a fresh
+      # release it may not be there the instant this fires — poll briefly.
+      - name: Download released phar & compute sha256
+        id: phar
+        run: |
+          set -euo pipefail
+          tag="${{ steps.tag.outputs.tag }}"
+          url="https://github.com/itzmekhokan/pressready/releases/download/${tag}/pressready.phar"
+          for attempt in $(seq 1 20); do
+            if curl -fsSL "$url" -o pressready.phar; then
+              break
+            fi
+            echo "phar not available yet (attempt ${attempt}); waiting…"
+            sleep 15
+          done
+          test -s pressready.phar || { echo "::error::pressready.phar never appeared on ${tag}"; exit 1; }
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+          echo "sha=$(sha256sum pressready.phar | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tap
+        uses: actions/checkout@v4
+        with:
+          repository: itzmekhokan/homebrew-pressready
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Update the formula
+        run: |
+          set -euo pipefail
+          f="tap/Formula/pressready.rb"
+          sed -i -E "s|^  url \".*\"|  url \"${{ steps.phar.outputs.url }}\"|" "$f"
+          sed -i -E "s|^  sha256 \".*\"|  sha256 \"${{ steps.phar.outputs.sha }}\"|" "$f"
+          echo "--- updated formula head ---"
+          sed -n '1,15p' "$f"
+
+      - name: Open bump PR on the tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd tap
+          tag="${{ steps.tag.outputs.tag }}"
+          branch="bump-${tag}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "Formula already at ${tag}; nothing to bump."
+            exit 0
+          fi
+          git checkout -b "$branch"
+          git commit -aqm "pressready ${tag}"
+          git push -fu origin "$branch"
+          gh pr create --repo itzmekhokan/homebrew-pressready \
+            --title "pressready ${tag}" \
+            --body "Automated formula bump for [\`${tag}\`](https://github.com/itzmekhokan/pressready/releases/tag/${tag}). URL and sha256 updated from the released \`pressready.phar\`." \
+            --head "$branch" --base main \
+            || echo "PR already exists for ${branch}."

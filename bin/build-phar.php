@@ -75,6 +75,13 @@ foreach ( $files as $f ) {
 	}
 }
 
+// Stamp the version into the phar. A built phar has no .git tree and no Composer
+// runtime metadata, so the driver's git/Composer resolution can't run inside it;
+// bake the resolved version in now and let pressready_version() read this file.
+$version = build_phar_version( $root );
+$phar->addFromString( 'VERSION', $version );
+++$added;
+
 // CLI stub: alias the running phar and run the (shebang-stripped) driver.
 $phar->setStub(
 	"#!/usr/bin/env php\n"
@@ -83,6 +90,28 @@ $phar->setStub(
 
 $phar->stopBuffering();
 @chmod( $out, 0755 );
+
+/**
+ * Resolve the version to stamp into the phar — the semver release tag from
+ * `git describe` (matching only vX.Y.Z so the floating major tag can't win),
+ * mirroring bin/pressready's pressready_version(). Falls back to 'unknown' when
+ * built outside a git checkout (e.g. from a release tarball).
+ *
+ * @param string $root Repository root.
+ * @return string
+ */
+function build_phar_version( string $root ): string {
+	if ( is_dir( $root . '/.git' ) ) {
+		$out = @shell_exec(
+			'git -C ' . escapeshellarg( $root )
+			. ' describe --tags --match "v[0-9]*.[0-9]*.[0-9]*" --always --dirty 2>/dev/null'
+		);
+		if ( is_string( $out ) && '' !== trim( $out ) ) {
+			return trim( $out );
+		}
+	}
+	return 'unknown';
+}
 
 /**
  * Format a byte count for the build summary.
