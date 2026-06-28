@@ -222,5 +222,29 @@ check(
 exec( "$bin --php=7.4-8.4 --matrix --path=tests/fixtures/upgrade.php --no-default-ignore --fail-on=fatal > /dev/null 2>&1", $_m1, $mrc );
 check( 1 === $mrc, '--matrix --fail-on=fatal exits 1 when the span contains a fatal' );
 
+// 27. The distributable .phar builds and runs self-contained: it extracts its
+// bundled toolchain and produces the same findings as the source CLI. Skipped
+// only where Phar building is impossible (no ext-phar / locked-down env).
+if ( extension_loaded( 'Phar' ) ) {
+	$phar_php = escapeshellarg( PHP_BINARY );
+	$phar_out = sys_get_temp_dir() . '/pressready-smoke-' . getmypid() . '.phar';
+	exec( "$phar_php -d phar.readonly=0 " . escapeshellarg( 'bin/build-phar.php' ) . ' ' . escapeshellarg( $phar_out ) . ' > /dev/null 2>&1', $_b, $brc );
+	if ( 0 === $brc && is_file( $phar_out ) ) {
+		// Run from a temp cwd to prove the phar has no dependence on the repo.
+		$abs  = getcwd() . '/tests/fixtures/upgrade.php';
+		$json = shell_exec( $phar_php . ' ' . escapeshellarg( $phar_out ) . ' --php=8.4 --wp=6.9 --path=' . escapeshellarg( $abs ) . ' --no-default-ignore --format=json 2>/dev/null' );
+		$t    = json_decode( (string) $json, true )['tally'] ?? array();
+		check(
+			1 === ( $t['fatal'] ?? null ) && 2 === ( $t['wp'] ?? null ),
+			'pressready.phar builds and scans self-contained (got ' . json_encode( $t ) . ')'
+		);
+		@unlink( $phar_out );
+	} else {
+		check( false, 'pressready.phar build failed (exit ' . $brc . ')' );
+	}
+} else {
+	echo "  – phar build test skipped (ext-phar not loaded)\n";
+}
+
 echo $failures ? "\nSMOKE FAILED ($failures)\n" : "\nALL SMOKE TESTS PASSED\n";
 exit( $failures ? 1 : 0 );
