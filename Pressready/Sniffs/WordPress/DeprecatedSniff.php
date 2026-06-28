@@ -166,9 +166,10 @@ class DeprecatedSniff implements Sniff {
 		if ( $is_call && isset( $this->index()['function'][ $lower ] )
 			&& ! isset( $this->declared_symbols( $phpcsFile )['function'][ $lower ] )
 			&& ! $this->is_namespaced_call( $phpcsFile, $stackPtr, $prev ) ) {
-			$entry = $this->index()['function'][ $lower ];
-			if ( $this->passes_gate( $entry['deprecated'] ) ) {
-				$this->report( $phpcsFile, $stackPtr, 'DeprecatedFunction', 'Function', $name . '()', $entry );
+			$entry  = $this->index()['function'][ $lower ];
+			$status = $this->finding_status( $entry );
+			if ( null !== $status ) {
+				$this->report( $phpcsFile, $stackPtr, 'DeprecatedFunction', 'Function', $name . '()', $entry, $status );
 			}
 		}
 	}
@@ -225,8 +226,9 @@ class DeprecatedSniff implements Sniff {
 		if ( $is_method_call && false !== $member && T_STRING === $tokens[ $member ]['code'] ) {
 			$key   = strtolower( $class . '::' . $tokens[ $member ]['content'] );
 			$entry = $this->index()['method'][ $key ] ?? null;
-			if ( $entry && $this->passes_gate( $entry['deprecated'] ) ) {
-				$this->report( $phpcsFile, $member, 'DeprecatedMethod', 'Method', $class . '::' . $tokens[ $member ]['content'] . '()', $entry );
+			$status = ( null !== $entry ) ? $this->finding_status( $entry ) : null;
+			if ( null !== $status ) {
+				$this->report( $phpcsFile, $member, 'DeprecatedMethod', 'Method', $class . '::' . $tokens[ $member ]['content'] . '()', $entry, $status );
 				return;
 			}
 		}
@@ -251,8 +253,9 @@ class DeprecatedSniff implements Sniff {
 		$path     = trim( $tokens[ $str ]['content'], "'\"" );
 		$basename = basename( $path );
 		$entry    = $this->index()['file'][ $basename ] ?? null;
-		if ( $entry && $this->passes_gate( $entry['deprecated'] ) ) {
-			$this->report( $phpcsFile, $str, 'DeprecatedFile', 'File', $basename, $entry );
+		$status = ( null !== $entry ) ? $this->finding_status( $entry ) : null;
+		if ( null !== $status ) {
+			$this->report( $phpcsFile, $str, 'DeprecatedFile', 'File', $basename, $entry, $status );
 		}
 	}
 
@@ -277,8 +280,9 @@ class DeprecatedSniff implements Sniff {
 			return;
 		}
 		$entry = $this->index()['class'][ $lower ] ?? null;
-		if ( $entry && $this->passes_gate( $entry['deprecated'] ) ) {
-			$this->report( $phpcsFile, $stackPtr, 'DeprecatedClass', 'Class', $unqualified, $entry );
+		$status = ( null !== $entry ) ? $this->finding_status( $entry ) : null;
+		if ( null !== $status ) {
+			$this->report( $phpcsFile, $stackPtr, 'DeprecatedClass', 'Class', $unqualified, $entry, $status );
 		}
 	}
 
@@ -298,14 +302,20 @@ class DeprecatedSniff implements Sniff {
 		}
 		$hook  = trim( $tokens[ $arg ]['content'], "'\"" );
 		$entry = $this->index()['hook'][ $hook ] ?? null; // hooks are case-sensitive.
-		if ( $entry && $this->passes_gate( $entry['deprecated'] ) ) {
+		$status = ( null !== $entry ) ? $this->finding_status( $entry ) : null;
+		if ( null !== $status ) {
 			$label = isset( $entry['type'] ) ? ucfirst( $entry['type'] ) . ' hook' : 'Hook';
-			$this->report( $phpcsFile, $arg, 'DeprecatedHook', $label, "'$hook'", $entry );
+			$this->report( $phpcsFile, $arg, 'DeprecatedHook', $label, "'$hook'", $entry, $status );
 		}
 	}
 
 	/**
-	 * Emit a warning for a deprecated-API finding.
+	 * Emit a finding for a deprecated- or removed-core-API usage.
+	 *
+	 * A symbol the target WP version has *removed* is a real fatal on upgrade
+	 * (undefined function/class), so it is reported as an error with "removed
+	 * since" wording the driver promotes to fatal; a still-shimmed deprecation
+	 * stays a warning.
 	 *
 	 * @param File   $phpcsFile File.
 	 * @param int    $stackPtr  Anchor token.
@@ -313,30 +323,59 @@ class DeprecatedSniff implements Sniff {
 	 * @param string $label     Human label ("Function", "Hook", …).
 	 * @param string $subject   The thing being used.
 	 * @param array  $entry     Dataset entry.
+	 * @param array  $status    Finding status from finding_status(): removed flag + version.
 	 * @return void
 	 */
-	private function report( File $phpcsFile, $stackPtr, $code, $label, $subject, array $entry ) {
+	private function report( File $phpcsFile, $stackPtr, $code, $label, $subject, array $entry, array $status ) {
 		$suffix = '';
 		if ( ! empty( $entry['replacement'] ) ) {
 			$suffix = ' Use ' . $entry['replacement'] . ' instead.';
 		}
-		$phpcsFile->addWarning(
-			'%s %s is deprecated since WordPress %s.%s',
-			$stackPtr,
-			$code,
-			array( $label, $subject, $entry['deprecated'], $suffix )
-		);
+		$data = array( $label, $subject, $status['version'], $suffix );
+		if ( $status['removed'] ) {
+			$phpcsFile->addError( '%s %s is removed since WordPress %s.%s', $stackPtr, $code, $data );
+			return;
+		}
+		$phpcsFile->addWarning( '%s %s is deprecated since WordPress %s.%s', $stackPtr, $code, $data );
 	}
 
 	/**
-	 * Whether a finding's deprecation version falls within the target window.
+	 * Decide whether a dataset entry is in scope for the target window, and if so
+	 * whether it is a removal (fatal) or a deprecation (warning).
 	 *
-	 * @param string $version Version the API was deprecated in.
+	 * Removal takes precedence: a symbol the target has removed is fatal even if
+	 * its deprecation predates a --since floor — for a delta scan it is the
+	 * removal landing in the (since, target] window that newly breaks the upgrade.
+	 *
+	 * @param array $entry Dataset entry (has 'deprecated', optionally 'removed').
+	 * @return array{removed:bool,version:string}|null Null when out of scope.
+	 */
+	private function finding_status( array $entry ) {
+		$target  = getenv( 'PRESSREADY_WP' );
+		$since   = getenv( 'PRESSREADY_WP_SINCE' );
+		$removed = $entry['removed'] ?? null;
+
+		// A removal in the window is a fatal; check it first so it wins over the
+		// (earlier) deprecation version.
+		if ( null !== $removed && '' !== $removed && $this->in_window( $removed, $target, $since ) ) {
+			return array( 'removed' => true, 'version' => (string) $removed );
+		}
+		if ( $this->in_window( $entry['deprecated'], $target, $since ) ) {
+			return array( 'removed' => false, 'version' => (string) $entry['deprecated'] );
+		}
+		return null;
+	}
+
+	/**
+	 * Whether a version falls within the target window: <= target (when set) and
+	 * > since (when set, for a delta scan).
+	 *
+	 * @param string      $version Version to test.
+	 * @param string|false $target  PRESSREADY_WP target, or false/'' for unbounded.
+	 * @param string|false $since   PRESSREADY_WP_SINCE floor, or false/'' for none.
 	 * @return bool
 	 */
-	private function passes_gate( $version ) {
-		$target = getenv( 'PRESSREADY_WP' );
-		$since  = getenv( 'PRESSREADY_WP_SINCE' );
+	private function in_window( $version, $target, $since ) {
 		if ( false !== $target && '' !== $target && version_compare( $version, $target, '>' ) ) {
 			return false;
 		}
@@ -489,7 +528,10 @@ class DeprecatedSniff implements Sniff {
 		if ( null !== $this->index ) {
 			return $this->index;
 		}
-		$path = $this->datasetPath ?: __DIR__ . '/../../../data/wp-deprecations.json';
+		// PRESSREADY_DATASET lets a run point at a custom/newer dataset (e.g. one
+		// regenerated against a more recent core, or a test fixture).
+		$env  = getenv( 'PRESSREADY_DATASET' );
+		$path = ( false !== $env && '' !== $env ) ? $env : ( $this->datasetPath ?: __DIR__ . '/../../../data/wp-deprecations.json' );
 		$data = array();
 		if ( is_file( $path ) ) {
 			$json = json_decode( (string) file_get_contents( $path ), true );

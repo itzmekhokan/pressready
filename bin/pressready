@@ -69,6 +69,14 @@ function main( array $argv ): void {
 		exit( 2 );
 	}
 
+	// Dataset-version awareness: the WP side can only know about deprecations the
+	// dataset was generated from. If --wp targets a newer release, results may be
+	// incomplete — warn (to stderr, never the report stream) rather than imply a
+	// clean bill of health from a stale dataset.
+	if ( '' !== $wp ) {
+		warn_if_dataset_stale( $wp, dataset_path( $pkg ) );
+	}
+
 	// Resolve one or more scan targets (repeated --path, comma lists, config
 	// `paths: []`). Every target must exist; $root is their common base, used to
 	// show paths relative to the scan in reports.
@@ -740,7 +748,13 @@ function regroup( array $data, string $root ): array {
  */
 function severity_of( array $m ): string {
 	if ( ! str_starts_with( $m['source'] ?? '', 'PHPCompatibility' ) ) {
-		return 'wp'; // Pressready sniff — a WP deprecation (always a warning).
+		// Pressready (WP) sniff. A core symbol the target WP version has removed is
+		// a real fatal on upgrade (undefined function/class); a still-shimmed
+		// deprecation is tech debt → a warning.
+		if ( false !== strpos( $m['message'] ?? '', 'removed since WordPress' ) ) {
+			return 'fatal';
+		}
+		return 'wp';
 	}
 	if ( false !== strpos( $m['message'] ?? '', 'removed since PHP' ) ) {
 		return 'fatal'; // Symbol is gone at the target version → undefined-symbol fatal.
@@ -1038,6 +1052,7 @@ function component_badge( array $cnt ): string {
  */
 function compact_message( string $message ): string {
 	// WP-side phrasing.
+	$message = preg_replace( '/ is removed since WordPress /', ' — removed WP ', $message );
 	$message = preg_replace( '/ is deprecated since WordPress /', ' — deprecated WP ', $message );
 	// PHP-side phrasing.
 	$message = preg_replace( '/ is deprecated since PHP .*? and removed since PHP /', ' — removed PHP ', $message );
@@ -1173,6 +1188,53 @@ function run_with_spinner( string $cmd, string $errfile ): void {
 	}
 	proc_close( $proc );
 	fwrite( STDERR, "\r\033[K" ); // Wipe the spinner line before the report prints.
+}
+
+/**
+ * Resolve the WordPress deprecations dataset path. PRESSREADY_DATASET overrides
+ * the bundled dataset (and is forwarded to the sniff), so the version check and
+ * the scan agree on which dataset is in use.
+ *
+ * @param string $pkg This package's root.
+ * @return string
+ */
+function dataset_path( string $pkg ): string {
+	$env = getenv( 'PRESSREADY_DATASET' );
+	if ( false !== $env && '' !== $env && is_file( $env ) ) {
+		return $env;
+	}
+	return $pkg . '/data/wp-deprecations.json';
+}
+
+/**
+ * Warn (to stderr) when the requested --wp target is newer than the WordPress
+ * version the dataset was generated from, so a stale dataset can't masquerade as
+ * a clean WP-side result. Compared on major.minor, so a pre-release source tag
+ * (e.g. "7.1-alpha-62161-src") matches the "7.1" target it represents.
+ *
+ * @param string $wp   Target WP version.
+ * @param string $path Dataset file path.
+ * @return void
+ */
+function warn_if_dataset_stale( string $wp, string $path ): void {
+	if ( ! is_file( $path ) ) {
+		return;
+	}
+	$data = json_decode( (string) file_get_contents( $path ), true );
+	$src  = $data['source']['wp_version'] ?? '';
+	$mm   = static fn( string $v ): string => preg_match( '/^(\d+(?:\.\d+)?)/', $v, $m ) ? $m[1] : '';
+	$have = $mm( (string) $src );
+	$want = $mm( $wp );
+	if ( '' !== $have && '' !== $want && version_compare( $want, $have, '>' ) ) {
+		fwrite(
+			STDERR,
+			sprintf(
+				"warning: --wp %s is newer than this dataset (WordPress %s); WP-side results may be incomplete — regenerate the dataset.\n",
+				$wp,
+				$have
+			)
+		);
+	}
 }
 
 /**

@@ -1,0 +1,30 @@
+{
+    "schema": 1,
+    "generated_at": "2026-01-01T00:00:00+00:00",
+    "source": {
+        "wp_version": "6.5"
+    },
+    "counts": {
+        "function": 2,
+        "method": 0,
+        "class": 0,
+        "file": 0,
+        "hook": 0
+    },
+    "deprecations": {
+        "function": {
+            "pressready_gone_function": {
+                "deprecated": "5.0.0",
+                "removed": "6.4.0",
+                "replacement": "pressready_new_function()"
+            },
+            "pressready_soft_deprecated": {
+                "deprecated": "5.0.0"
+            }
+        },
+        "method": {},
+        "class": {},
+        "file": {},
+        "hook": {}
+    }
+}
