@@ -255,7 +255,9 @@ $stub = sys_get_temp_dir() . '/pressready-entry-' . getmypid();
 file_put_contents( $stub . '/pressready', "#!/bin/sh\necho \"called: \$*\"\n" );
 chmod( $stub . '/pressready', 0755 );
 $entry = escapeshellarg( getcwd() . '/entrypoint.sh' );
-$cli   = (string) shell_exec( 'PATH=' . escapeshellarg( $stub ) . ':$PATH sh ' . $entry . ' --php=8.4 --wp=6.9 --path=wp-content 2>&1' );
+// Force CLI mode by clearing GITHUB_ACTIONS — CI itself sets it to "true" for
+// every step, which would otherwise push this invocation into action mode.
+$cli = (string) shell_exec( 'GITHUB_ACTIONS= PATH=' . escapeshellarg( $stub ) . ':$PATH sh ' . $entry . ' --php=8.4 --wp=6.9 --path=wp-content 2>&1' );
 check(
 	false !== strpos( $cli, 'called: --php=8.4 --wp=6.9 --path=wp-content' ),
 	'entrypoint CLI mode passes args straight through (got ' . trim( $cli ) . ')'
