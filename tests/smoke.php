@@ -166,5 +166,39 @@ check( 0 === ( $t['total'] ?? null ), 'self-declared symbols are not flagged as 
 $t = tally_of( $bin, '--wp=6.9 --path=tests/fixtures/unshadowed.php' );
 check( 2 === ( $t['wp'] ?? null ), 'undeclared core deprecations are still flagged (got ' . json_encode( $t ) . ')' );
 
+// --- issue #3: removed-by-target WP findings are fatal; dataset-version aware ---
+// Drive a fixture dataset that marks pressready_gone_function() removed in 6.4.
+$ds  = escapeshellarg( __DIR__ . '/fixtures/removed/dataset.json' );
+$rm  = '--path=tests/fixtures/removed/usage.php --no-default-ignore --format=json';
+
+// 20. With --wp at/after the removal version, the removed symbol is a FATAL while
+// the still-shimmed deprecation stays a warning.
+$t = json_decode( (string) shell_exec( "PRESSREADY_DATASET=$ds $bin --wp=6.9 $rm 2>/dev/null" ), true )['tally'] ?? array();
+check(
+	1 === ( $t['fatal'] ?? null ) && 1 === ( $t['wp'] ?? null ),
+	'removed-by-target WP symbol is fatal, deprecation stays a warning (got ' . json_encode( $t ) . ')'
+);
+
+// 21. Before the removal version, the same symbol is only a deprecation (no fatal).
+$t = json_decode( (string) shell_exec( "PRESSREADY_DATASET=$ds $bin --wp=6.3 $rm 2>/dev/null" ), true )['tally'] ?? array();
+check(
+	0 === ( $t['fatal'] ?? null ) && 2 === ( $t['wp'] ?? null ),
+	'pre-removal target reports a deprecation, not a fatal (got ' . json_encode( $t ) . ')'
+);
+
+// 22. Targeting a WP newer than the dataset's source version warns on stderr
+// (the dataset here is generated from 6.5, so --wp=6.9 is newer).
+$err = (string) shell_exec( "PRESSREADY_DATASET=$ds $bin --wp=6.9 $rm 2>&1 1>/dev/null" );
+check( false !== strpos( $err, 'newer than this dataset' ), 'stale-dataset target warns on stderr' );
+
+// 23. Delta scan: a removal landing in the (since, target] window is fatal even
+// though the symbol's *deprecation* predates the since floor — it is the removal
+// that newly breaks the upgrade. (removed 6.4 ∈ (6.0, 6.9]; deprecated 5.0 < 6.0.)
+$t = json_decode( (string) shell_exec( "PRESSREADY_DATASET=$ds $bin --wp=6.9 --since=6.0 $rm 2>/dev/null" ), true )['tally'] ?? array();
+check(
+	1 === ( $t['fatal'] ?? null ) && 0 === ( $t['wp'] ?? null ),
+	'delta scan flags a removal in-window even when its deprecation predates --since (got ' . json_encode( $t ) . ')'
+);
+
 echo $failures ? "\nSMOKE FAILED ($failures)\n" : "\nALL SMOKE TESTS PASSED\n";
 exit( $failures ? 1 : 0 );

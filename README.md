@@ -36,12 +36,14 @@
 
 | Level | Meaning | Engine |
 |---|---|---|
-| `fatal` | PHP symbol **removed** by the target version → white screen on upgrade | PHPCompatibility |
+| `fatal` | A symbol **removed** by the target version — PHP symbol gone, or a WordPress core API removed by the target WP version → white screen / undefined-symbol fatal on upgrade | PHPCompatibility · Pressready sniff |
 | `risky` | Behavioural change that still runs but may produce wrong results | PHPCompatibility |
 | `php` | PHP feature deprecated (not yet removed) | PHPCompatibility |
-| `wp` | WordPress core API deprecated by the target WP version | Pressready sniff |
+| `wp` | WordPress core API deprecated (but still shimmed) by the target WP version | Pressready sniff |
 
 Under the hood Pressready runs two engines in a single PHPCS pass: [PHPCompatibility](https://github.com/PHPCompatibility/PHPCompatibility) for the PHP axis, and a custom sniff driven by an authoritative WP deprecations dataset for the WordPress axis.
+
+The WP dataset records the WordPress version it was generated from. If `--wp` targets a newer release than the dataset, Pressready prints a warning to stderr (WP-side results may be incomplete — regenerate the dataset) rather than imply a clean bill of health. Point a run at a custom or newer dataset with the `PRESSREADY_DATASET=/path/to/wp-deprecations.json` environment variable.
 
 ---
 
