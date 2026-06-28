@@ -155,5 +155,16 @@ check(
 	'generator emits no `argument` bucket but still records deprecated functions'
 );
 
+// 18. A component that defines its own symbol shadowing a deprecated core name
+// is not falsely flagged (issue #2): shadowed.php declares its own get_settings()
+// and WP_User_Search, so neither usage is a finding.
+$t = tally_of( $bin, '--wp=6.9 --path=tests/fixtures/shadowed.php' );
+check( 0 === ( $t['total'] ?? null ), 'self-declared symbols are not flagged as deprecated core (got ' . json_encode( $t ) . ')' );
+
+// 19. Control: the same usages WITHOUT a local declaration are still flagged,
+// proving the shadow guard does not suppress genuine core-API usage.
+$t = tally_of( $bin, '--wp=6.9 --path=tests/fixtures/unshadowed.php' );
+check( 2 === ( $t['wp'] ?? null ), 'undeclared core deprecations are still flagged (got ' . json_encode( $t ) . ')' );
+
 echo $failures ? "\nSMOKE FAILED ($failures)\n" : "\nALL SMOKE TESTS PASSED\n";
 exit( $failures ? 1 : 0 );
