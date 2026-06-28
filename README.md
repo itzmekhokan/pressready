@@ -50,6 +50,22 @@ The WP dataset records the WordPress version it was generated from. If `--wp` ta
 
 ## Install
 
+### Standalone PHAR (no Composer)
+
+The quickest way to run Pressready anywhere — CI, a server, or a project you don't want to add a dev dependency to. The `.phar` is a single self-contained file that bundles the whole PHPCS toolchain, so there's nothing to `composer install` and **no chance of clashing with a project's own pinned `squizlabs/php_codesniffer`**.
+
+```bash
+curl -L https://github.com/itzmekhokan/pressready/releases/latest/download/pressready.phar -o pressready.phar
+chmod +x pressready.phar
+./pressready.phar --php=8.4 --wp=6.9 --path=wp-content
+```
+
+On first run it extracts its bundled toolchain to a cache dir; subsequent runs reuse it. Every flag works exactly as the Composer-installed CLI.
+
+> Building from source: `php -d phar.readonly=0 bin/build-phar.php` (after `composer install`) writes `build/pressready.phar`.
+
+### Composer
+
 Pressready installs in two tiers depending on how new a PHP version you need to target.
 
 ### Default — no config (PHP ≤ 8.1)

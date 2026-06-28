@@ -58,7 +58,13 @@ function main( array $argv ): void {
 	$since  = $opts['since'] ?? '';
 	$format    = $opts['format'] ?? 'grouped';
 	$ignore_on = $opts['ignore-on'] ?? '';
-	$pkg       = dirname( __DIR__ ); // This package's root (holds Pressready/ + the dataset).
+
+	// Package root that holds Pressready/ + the dataset + the bundled phpcs. When
+	// running from the distributable .phar, the toolchain is extracted to a cache
+	// dir (phpcs runs as a subprocess over real files, which phar:// can't be), and
+	// $home points there; otherwise it's null and we use the source/vendor layout.
+	$home = phar_runtime_dir();
+	$pkg  = $home ?? dirname( __DIR__ );
 
 	if ( '' === $php && '' === $wp ) {
 		fwrite( STDERR, "error: specify at least one target — --php=<ver> and/or --wp=<ver>\n" );
@@ -104,7 +110,7 @@ function main( array $argv ): void {
 	}
 	$root = common_base( $roots );
 
-	$phpcs = find_phpcs();
+	$phpcs = find_phpcs( $home );
 	if ( null === $phpcs ) {
 		fwrite( STDERR, "error: PHP_CodeSniffer not found (run `composer install`)\n" );
 		exit( 2 );
@@ -112,12 +118,16 @@ function main( array $argv ): void {
 
 	// Assemble the standard list: WP side (Pressready) when --wp is given, PHP
 	// side (PHPCompatibilityWP) when --php is given. Both run in one PHPCS pass.
+	// In phar mode PHPCompatibilityWP is referenced by its extracted ruleset path
+	// (not by registered name), so phpcs needs no installed_paths config.
 	$standards = array();
 	if ( '' !== $wp ) {
 		$standards[] = $pkg . '/Pressready/ruleset.xml';
 	}
 	if ( '' !== $php ) {
-		$standards[] = 'PHPCompatibilityWP';
+		$standards[] = ( null !== $home )
+			? $home . '/vendor/phpcompatibility/phpcompatibility-wp/PHPCompatibilityWP/ruleset.xml'
+			: 'PHPCompatibilityWP';
 	}
 
 	// PHPCS appends a timing footer to stdout with --report=json, so write the
@@ -1459,22 +1469,53 @@ function warn_if_dataset_stale( string $wp, string $path ): void {
 }
 
 /**
- * Locate the PHP_CodeSniffer binary, whether this package is run standalone
- * (its own vendor/) or installed as a dependency (the consumer's vendor/bin).
+ * Locate the PHP_CodeSniffer binary, whether this package is run from the
+ * extracted phar bundle, standalone (its own vendor/), or installed as a
+ * dependency (the consumer's vendor/bin).
  *
+ * @param string|null $home Extracted phar home, or null when not running from a phar.
  * @return string|null Absolute path to phpcs, or null if not found.
  */
-function find_phpcs(): ?string {
-	$candidates = array(
-		dirname( __DIR__ ) . '/vendor/bin/phpcs', // Standalone: package is the project root.
-		dirname( __DIR__, 3 ) . '/bin/phpcs',     // Installed: vendor/itzmekhokan/pressready/bin → vendor/bin.
-	);
+function find_phpcs( ?string $home = null ): ?string {
+	$candidates = array();
+	if ( null !== $home ) {
+		$candidates[] = $home . '/vendor/bin/phpcs'; // Phar: bundled toolchain, extracted.
+	}
+	$candidates[] = dirname( __DIR__ ) . '/vendor/bin/phpcs'; // Standalone: package is the project root.
+	$candidates[] = dirname( __DIR__, 3 ) . '/bin/phpcs';     // Installed: vendor/itzmekhokan/pressready/bin → vendor/bin.
 	foreach ( $candidates as $path ) {
 		if ( is_file( $path ) ) {
 			return $path;
 		}
 	}
 	return null;
+}
+
+/**
+ * When running from the distributable .phar, extract the bundled toolchain
+ * (phpcs + standards + dataset) to a per-version cache dir once and return it;
+ * otherwise return null. phpcs runs as a subprocess over real files, which a
+ * phar:// path cannot provide (phpcs's sniff discovery uses glob(), unsupported
+ * on the phar stream), so self-extraction is how the single-file build stays
+ * conflict-free yet runnable.
+ *
+ * @return string|null Absolute path to the extracted home, or null when not in a phar.
+ */
+function phar_runtime_dir(): ?string {
+	$phar = Phar::running( false );
+	if ( '' === $phar ) {
+		return null;
+	}
+	// Key the cache by the phar's identity so a new build re-extracts cleanly,
+	// without hashing the whole archive on every run.
+	$key      = substr( md5( $phar . '|' . (string) @filemtime( $phar ) . '|' . (string) @filesize( $phar ) ), 0, 12 );
+	$home     = sys_get_temp_dir() . '/pressready-phar-' . $key;
+	$sentinel = $home . '/.pressready-extracted';
+	if ( ! is_file( $sentinel ) ) {
+		( new Phar( $phar ) )->extractTo( $home, null, true );
+		@touch( $sentinel );
+	}
+	return $home;
 }
 
 /**

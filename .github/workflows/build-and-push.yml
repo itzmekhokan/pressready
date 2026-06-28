@@ -59,3 +59,34 @@ jobs:
           MAJOR="${GITHUB_REF_NAME%%.*}"   # v1.3.0 -> v1
           git tag -f "$MAJOR"
           git push origin -f "refs/tags/$MAJOR"
+
+  # Build the single-file distributable and attach it to the GitHub release, so
+  # consumers can `curl -L .../pressready.phar` with no composer install and no
+  # chance of clashing with their pinned phpcs.
+  release-phar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          ini-values: phar.readonly=0
+
+      # Install with dev deps so the phar bundles the pre-release WP compat engine
+      # (PHP 8.2–8.4 detection), mirroring the action image.
+      - name: Install toolchain
+        run: composer install --no-interaction --no-progress
+
+      - name: Build pressready.phar
+        run: php bin/build-phar.php build/pressready.phar
+
+      - name: Smoke-test the phar
+        run: php build/pressready.phar --php=8.4 --wp=6.9 --path=tests/fixtures/upgrade.php --no-default-ignore --format=summary
+
+      - name: Attach phar to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" build/pressready.phar --clobber
