@@ -290,5 +290,59 @@ check(
 	'--format=gitlab emits valid Code Quality issues (fatal → blocker, unique fingerprints)'
 );
 
+// 30. --version / -V print a non-empty version and exit 0, handled early like
+// --help (before any target validation). In a git checkout this resolves via
+// `git describe`; the SARIF driver carries the same string.
+exec( "$bin --version 2>/dev/null", $_v, $vrc );
+$ver = trim( implode( "\n", $_v ) );
+check(
+	0 === $vrc && 1 === preg_match( '/^pressready \S+/', $ver ) && false === strpos( $ver, 'unknown' ),
+	'--version prints a resolved version and exits 0 (got ' . $ver . ')'
+);
+$short = trim( (string) shell_exec( "$bin -V 2>/dev/null" ) );
+check( $short === $ver, '-V matches --version (got ' . $short . ')' );
+$sarif_ver = json_decode(
+	(string) shell_exec( "$bin --php=8.4 --wp=6.9 --path=tests/fixtures/upgrade.php --no-default-ignore --format=sarif 2>/dev/null" ),
+	true
+)['runs'][0]['tool']['driver']['version'] ?? '';
+check(
+	'' !== $sarif_ver && ( 'pressready ' . $sarif_ver ) === $ver,
+	'SARIF tool.driver.version matches --version (got ' . $sarif_ver . ')'
+);
+
+// 31. The WP-CLI command forwards --matrix to the engine and renders the graded
+// matrix (instead of silently ignoring it), honouring --fail-on. Skipped when
+// no `wp` binary is on PATH (the engine path is already covered by 24–26).
+$wp_bin = trim( (string) shell_exec( 'command -v wp 2>/dev/null' ) );
+if ( '' !== $wp_bin ) {
+	// Copy the fixture outside tests/ so the default ignore doesn't drop it
+	// (WP-CLI intercepts --no-* flags, so --no-default-ignore isn't usable here).
+	$wpdir = sys_get_temp_dir() . '/pressready-wpcli-' . getmypid();
+	@mkdir( $wpdir );
+	copy( getcwd() . '/tests/fixtures/upgrade.php', $wpdir . '/u.php' );
+	$wpcmd = escapeshellarg( $wp_bin ) . ' --require=' . escapeshellarg( getcwd() . '/wp-cli.php' )
+		. ' pressready scan --php=7.4-8.4 --matrix ' . escapeshellarg( $wpdir ) . ' --allow-root';
+
+	$mjson = json_decode( (string) shell_exec( $wpcmd . ' --format=json 2>/dev/null' ), true )['matrix']['php'] ?? array();
+	check(
+		'7.4' === ( $mjson['safe_through'] ?? null ) && '8.0' === ( $mjson['first_break'] ?? null ),
+		'wp pressready scan --matrix --format=json passes the matrix through (got ' . json_encode( array( $mjson['safe_through'] ?? null, $mjson['first_break'] ?? null ) ) . ')'
+	);
+
+	$mtable = (string) shell_exec( $wpcmd . ' 2>&1' );
+	check(
+		false !== strpos( $mtable, 'Safe through PHP 7.4' ) && false !== strpos( $mtable, 'First break: PHP 8.0' ),
+		'wp pressready scan --matrix renders the graded verdict'
+	);
+
+	exec( $wpcmd . ' --fail-on=fatal > /dev/null 2>&1', $_wm, $wmrc );
+	check( 1 === $wmrc, 'wp pressready scan --matrix --fail-on=fatal exits 1 on a fatal span' );
+
+	@unlink( $wpdir . '/u.php' );
+	@rmdir( $wpdir );
+} else {
+	echo "  – wp pressready --matrix test skipped (no wp binary)\n";
+}
+
 echo $failures ? "\nSMOKE FAILED ($failures)\n" : "\nALL SMOKE TESTS PASSED\n";
 exit( $failures ? 1 : 0 );

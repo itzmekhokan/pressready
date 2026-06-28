@@ -28,6 +28,8 @@
 - [GitHub Actions / CI](#github-actions--ci)
 - [Run anywhere with Docker](#run-anywhere-with-docker)
 - [GitLab CI](#gitlab-ci)
+- [Other CI systems](#other-ci-systems)
+- [Use the ruleset in your editor](#use-the-ruleset-in-your-editor)
 - [Pre-commit hook (optional)](#pre-commit-hook-optional)
 - [Baseline (legacy sites)](#baseline-legacy-sites)
 - [Exit codes](#exit-codes)
@@ -207,6 +209,7 @@ On a large `wp-content` the report leads with a **fix-first block** — every `f
 | `--ignore=<patterns>` | Extra comma-separated path patterns to skip |
 | `--no-default-ignore` | Disable built-in ignores (`vendor`, `node_modules`, `build`, `dist`, `*.min.php`, `tests`, `*.blade.php`) |
 | `-h`, `--help` | Print the usage / flag reference and exit |
+| `-V`, `--version` | Print the version and exit (resolves the installed release, or `git describe` in a dev checkout) |
 | `--only=<needle>` | Show only components whose name matches this substring |
 | `--top=N` | Show only the N worst components (most fatals first) |
 | `--no-collapse` | Show one line per finding instead of collapsing duplicates |
@@ -359,9 +362,12 @@ wp pressready scan --wp=6.9 --format=json
 wp pressready scan --wp=6.9 --since=6.4               # delta scan
 wp pressready scan --php=8.4 --wp=6.9 --fail-on=fatal # CI gate
 wp pressready scan --php=8.4 --wp=6.9 --top=10        # focus
+wp pressready scan --php=7.4-8.4 --matrix             # how far can I upgrade?
 ```
 
 `--format`: `table` (default) · `summary` · `json` · `csv` · `yaml` · `count`
+
+`--matrix` grades every version in the span and prints the highest fatal-free version + first break per axis (a graded table plus a safe-through/first-break verdict), honouring `--fail-on` for CI.
 
 All standalone CLI flags (`--ignore-on`, `--parallel`, `--cache`, `--ignore`, `--only`, `--top`, `--config`, etc.) work identically with the WP-CLI command.
 
@@ -527,6 +533,62 @@ To **fail the pipeline** on fatals (the Code Quality report is informational and
         --format=gitlab > gl-code-quality-report.json
     - pressready --php=8.4 --wp=6.9 --path=wp-content --fail-on=fatal
 ```
+
+---
+
+## Other CI systems
+
+Any runner that can pull a Docker image can gate on Pressready — the dual-mode image is a self-contained CLI (no PHP/Composer on the agent). Two ready recipes:
+
+### Bitbucket Pipelines
+
+```yaml
+# bitbucket-pipelines.yml
+pipelines:
+  default:
+    - step:
+        name: Pressready
+        image: ghcr.io/itzmekhokan/pressready:1
+        script:
+          - pressready --php=8.4 --wp=6.9 --path=wp-content --fail-on=fatal
+```
+
+### Jenkins (declarative pipeline)
+
+```groovy
+// Jenkinsfile — runs the gate inside the published image on any agent with Docker.
+pipeline {
+  agent { docker { image 'ghcr.io/itzmekhokan/pressready:1' } }
+  stages {
+    stage('Pressready') {
+      steps {
+        sh 'pressready --php=8.4 --wp=6.9 --path=wp-content --fail-on=fatal'
+      }
+    }
+  }
+}
+```
+
+Both honour the standard exit codes (`0` clean · `1` findings at/above `--fail-on` · `2` usage/config error), so the step fails the build exactly when the gate trips. Swap the image for `pressready.phar` or `vendor/bin/pressready` on agents that already have PHP.
+
+---
+
+## Use the ruleset in your editor
+
+Pressready is a phpcs standard, so any phpcs-aware editor can surface findings inline as you type — no separate plugin. Point your editor at the installed binary and the bundled standard:
+
+**VS Code** ([phpcs / “PHP Sniffer” extensions](https://marketplace.visualstudio.com/search?term=phpcs&target=VSCode)) — `.vscode/settings.json`:
+
+```jsonc
+{
+  "phpsab.executablePathCS": "vendor/bin/phpcs",
+  "phpsab.standard": "vendor/itzmekhokan/pressready/Pressready/ruleset.xml"
+}
+```
+
+**PhpStorm** — *Settings → PHP → Quality Tools → PHP_CodeSniffer*: set the path to `vendor/bin/phpcs`, then under the *PHP_CodeSniffer* inspection set **Coding standard** to *Custom* and choose `Pressready/ruleset.xml`.
+
+This runs the WordPress-deprecation sniff live. PHP-version findings come from the bundled PHPCompatibility standard — pass the target version with `--runtime-set testVersion 8.4` in the inspection’s *Tool arguments* to grade against a specific PHP. For the full severity model and version gating, keep using the `pressready` CLI / CI gate; the editor integration is for fast feedback while editing.
 
 ---
 

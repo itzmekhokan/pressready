@@ -52,6 +52,12 @@ function main( array $argv ): void {
 		exit( 0 );
 	}
 
+	// --version / -V: print the resolved version and exit, before any validation.
+	if ( in_array( '--version', $argv, true ) || in_array( '-V', $argv, true ) ) {
+		echo 'pressready ' . pressready_version() . "\n";
+		exit( 0 );
+	}
+
 	$opts   = apply_config( parse_opts( $argv ) ); // CLI > .pressready.json > defaults.
 	$php    = $opts['php'] ?? '';
 	$wp     = $opts['wp'] ?? '';
@@ -314,6 +320,43 @@ function main( array $argv ): void {
 }
 
 /**
+ * Resolve the running version. There is no hardcoded version constant —
+ * releases are git-tag driven — so resolve it at runtime, most-authoritative first:
+ *
+ *   1. Composer's runtime API when installed as a dependency (the released tag).
+ *   2. `git describe --tags` in a dev checkout.
+ *   3. A final "unknown" fallback (e.g. inside the PHAR without a git tree).
+ *
+ * @return string
+ */
+function pressready_version(): string {
+	if ( class_exists( '\Composer\InstalledVersions' ) ) {
+		try {
+			$v = \Composer\InstalledVersions::getPrettyVersion( 'itzmekhokan/pressready' );
+			if ( is_string( $v ) && '' !== $v ) {
+				return $v;
+			}
+		} catch ( \Throwable $e ) {
+			// Package not registered in this install — fall through to git.
+		}
+	}
+
+	$root = dirname( __DIR__ );
+	if ( is_dir( $root . '/.git' ) ) {
+		// Match only semver release tags so the floating `v1` major tag doesn't win.
+		$out = @shell_exec(
+			'git -C ' . escapeshellarg( $root )
+			. ' describe --tags --match "v[0-9]*.[0-9]*.[0-9]*" --always --dirty 2>/dev/null'
+		);
+		if ( is_string( $out ) && '' !== trim( $out ) ) {
+			return trim( $out );
+		}
+	}
+
+	return 'unknown';
+}
+
+/**
  * Print the usage / flag reference for --help / -h.
  *
  * @return void
@@ -357,6 +400,7 @@ Baseline & config:
   --generate-baseline[=<file>]   Snapshot current findings and exit
   --config=<file>                Load defaults from a JSON config file
   -h, --help                     Show this help and exit
+  -V, --version                  Print the version and exit
 
 Exit codes:
   0  clean (or no --fail-on threshold tripped)
@@ -667,6 +711,7 @@ function render_sarif( array $data, string $root ): void {
 				'tool'    => array(
 					'driver' => array(
 						'name'           => 'Pressready',
+						'version'        => pressready_version(),
 						'informationUri' => 'https://github.com/itzmekhokan/pressready',
 						'rules'          => $rules,
 					),
