@@ -69,6 +69,18 @@ function main( array $argv ): void {
 		exit( 2 );
 	}
 
+	// Compatibility matrix (--matrix): one scan tells us, per axis, the highest
+	// fatal-free version and the first break. Scanning at the ceiling of the
+	// requested PHP span surfaces every removal up to it (each finding names the
+	// version it was removed in), which the matrix then sweeps analytically — no
+	// N re-tokenizations. $test_php is what we hand phpcs; $php stays the span.
+	$matrix   = isset( $opts['matrix'] );
+	$test_php = $php;
+	if ( $matrix && '' !== $php ) {
+		$php_grid = php_version_grid( $php );
+		$test_php = $php_grid ? (string) end( $php_grid ) : $php;
+	}
+
 	// Dataset-version awareness: the WP side can only know about deprecations the
 	// dataset was generated from. If --wp targets a newer release, results may be
 	// incomplete — warn (to stderr, never the report stream) rather than imply a
@@ -151,12 +163,13 @@ function main( array $argv ): void {
 		$args[] = '--ignore=' . $ignore;
 	}
 
-	if ( '' !== $php ) {
+	if ( '' !== $test_php ) {
 		// testVersion is the PHP version (or range) the site will run on;
-		// PHPCompatibility reports everything removed/deprecated by then.
+		// PHPCompatibility reports everything removed/deprecated by then. In
+		// matrix mode this is the ceiling of the requested span (see $test_php).
 		$args[] = '--runtime-set';
 		$args[] = 'testVersion';
-		$args[] = $php;
+		$args[] = $test_php;
 	}
 	foreach ( $roots as $r ) {
 		$args[] = $r; // phpcs accepts multiple trailing paths in one pass.
@@ -211,6 +224,14 @@ function main( array $argv ): void {
 	// with no PHP). They are not compatibility findings and otherwise inflate the
 	// deprecation totals — done before baseline/tally so every path is consistent.
 	$data = strip_internal( $data );
+
+	// Compatibility matrix: sweep the requested span from this single scan and
+	// report the highest fatal-free version + first break, then exit. Honours
+	// --fail-on against the fatals found across the span.
+	if ( $matrix ) {
+		render_matrix_output( $data, $root, $php, $wp, $format );
+		exit( exit_code( tally( regroup( $data, $root ) ), $opts ) );
+	}
 
 	// Generate-baseline mode: snapshot the current findings and exit. Adopt the
 	// tool on a legacy site without drowning — only NEW findings fail CI after.
@@ -297,6 +318,7 @@ Targets:
 
 Output:
   --format=<fmt>         grouped (default) | table | summary | json | sarif | github
+  --matrix               Grade the target span: highest safe version + first break
   --all                  List every deprecation inline (alias: --verbose)
   --no-collapse          One line per finding instead of collapsing duplicates
 
@@ -763,6 +785,205 @@ function severity_of( array $m ): string {
 		return 'risky'; // Behavioural/correctness change PHPCompatibility flags as an error.
 	}
 	return 'php'; // PHP deprecation warning.
+}
+
+/**
+ * The discrete PHP versions Pressready sweeps for the compatibility matrix,
+ * filtered to a requested range. PHP minors are not arithmetic across majors
+ * (7.4 → 8.0), so the known sequence is enumerated explicitly. A range with no
+ * known versions inside it falls back to its own bounds.
+ *
+ * @param string $php Version or range, e.g. "8.4" or "8.0-8.4".
+ * @return string[] Ascending list of versions to grade.
+ */
+function php_version_grid( string $php ): array {
+	static $known = array( '5.6', '7.0', '7.1', '7.2', '7.3', '7.4', '8.0', '8.1', '8.2', '8.3', '8.4', '8.5' );
+	$parts = explode( '-', $php );
+	$low   = $parts[0];
+	$high  = $parts[1] ?? $parts[0];
+	$grid  = array();
+	foreach ( $known as $v ) {
+		if ( version_compare( $v, $low, '>=' ) && version_compare( $v, $high, '<=' ) ) {
+			$grid[] = $v;
+		}
+	}
+	if ( empty( $grid ) ) {
+		$grid = ( $low === $high ) ? array( $low ) : array( $low, $high );
+	}
+	return $grid;
+}
+
+/**
+ * WordPress versions to grade for the matrix: the distinct removal thresholds in
+ * scope, plus the target itself (so a clean target still shows one graded row).
+ *
+ * @param string   $wp      Target WP version.
+ * @param string[] $thresholds WP removal-version thresholds collected from the scan.
+ * @return string[] Ascending list of versions to grade.
+ */
+function wp_version_grid( string $wp, array $thresholds ): array {
+	$set = array( $wp => true );
+	foreach ( $thresholds as $t ) {
+		if ( version_compare( $t, $wp, '<=' ) ) {
+			$set[ $t ] = true;
+		}
+	}
+	$grid = array_keys( $set );
+	usort( $grid, 'version_compare' );
+	return $grid;
+}
+
+/**
+ * Collect the per-axis fatal removal-version thresholds from a scan. Every fatal
+ * names the version it was removed in (PHP via PHPCompatibility, WP via the
+ * Pressready sniff), so a finding that breaks at version T contributes T.
+ *
+ * @param array $data PHPCS JSON report (post strip_internal).
+ * @return array{php:string[],wp:string[]}
+ */
+function matrix_thresholds( array $data ): array {
+	$out = array( 'php' => array(), 'wp' => array() );
+	foreach ( $data['files'] as $info ) {
+		if ( empty( $info['messages'] ) ) {
+			continue;
+		}
+		foreach ( $info['messages'] as $m ) {
+			if ( 'fatal' !== severity_of( $m ) ) {
+				continue;
+			}
+			$msg = $m['message'] ?? '';
+			if ( preg_match( '/removed since PHP (\d+(?:\.\d+)?)/', $msg, $mm ) ) {
+				$out['php'][] = $mm[1];
+			} elseif ( preg_match( '/removed since WordPress (\d+(?:\.\d+)?)/', $msg, $mm ) ) {
+				$out['wp'][] = $mm[1];
+			}
+		}
+	}
+	return $out;
+}
+
+/**
+ * Grade one axis: for each graded version, how many fatals have a removal
+ * threshold at or below it (cumulative — a removal stays broken once it lands).
+ * Yields the highest fatal-free version (`safe_through`) and the first breaking
+ * one (`first_break`).
+ *
+ * @param string   $label      Axis label ("PHP" / "WP").
+ * @param string[] $grid       Ascending graded versions.
+ * @param string[] $thresholds Removal-version thresholds for this axis.
+ * @return array{label:string,grid:array<int,array{version:string,fatals:int}>,safe_through:?string,first_break:?string}
+ */
+function axis_matrix( string $label, array $grid, array $thresholds ): array {
+	$rows         = array();
+	$safe_through = null;
+	$first_break  = null;
+	foreach ( $grid as $v ) {
+		$n = 0;
+		foreach ( $thresholds as $t ) {
+			if ( version_compare( $t, $v, '<=' ) ) {
+				++$n;
+			}
+		}
+		$rows[] = array( 'version' => $v, 'fatals' => $n );
+		if ( 0 === $n ) {
+			$safe_through = $v;
+		} elseif ( null === $first_break ) {
+			$first_break = $v;
+		}
+	}
+	return array(
+		'label'        => $label,
+		'grid'         => $rows,
+		'safe_through' => $safe_through,
+		'first_break'  => $first_break,
+	);
+}
+
+/**
+ * Build the per-axis matrix from a scan, then render it as human output or JSON.
+ *
+ * @param array  $data   PHPCS JSON report.
+ * @param string $root   Scan root (shown in the header).
+ * @param string $php    PHP target/range, or ''.
+ * @param string $wp     WP target, or ''.
+ * @param string $format Output format ('json' emits machine output; else human).
+ * @return void
+ */
+function render_matrix_output( array $data, string $root, string $php, string $wp, string $format ): void {
+	$thr  = matrix_thresholds( $data );
+	$axes = array();
+	if ( '' !== $php ) {
+		$axes['php'] = axis_matrix( 'PHP', php_version_grid( $php ), $thr['php'] );
+	}
+	if ( '' !== $wp ) {
+		$axes['wp'] = axis_matrix( 'WP', wp_version_grid( $wp, $thr['wp'] ), $thr['wp'] );
+	}
+
+	if ( 'json' === $format ) {
+		echo json_encode( array( 'matrix' => $axes ), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n";
+		return;
+	}
+	render_matrix( $axes, $root, $php, $wp );
+}
+
+/**
+ * Human-readable compatibility matrix: a graded row per version, then a verdict
+ * naming the highest safe version and the first break per axis.
+ *
+ * @param array  $axes Per-axis matrices from axis_matrix().
+ * @param string $root Scan root.
+ * @param string $php  PHP target/range, or ''.
+ * @param string $wp   WP target, or ''.
+ * @return void
+ */
+function render_matrix( array $axes, string $root, string $php, string $wp ): void {
+	$targets = array();
+	if ( '' !== $php ) {
+		$targets[] = 'PHP ' . str_replace( '-', '–', $php );
+	}
+	if ( '' !== $wp ) {
+		$targets[] = 'WP ' . $wp;
+	}
+
+	echo "\n";
+	echo '  Pressready — compatibility matrix — ' . implode( ' + ', $targets ) . "\n";
+	echo "  Scanned: $root\n\n";
+
+	foreach ( $axes as $axis ) {
+		echo '  ' . $axis['label'] . "\n";
+		foreach ( $axis['grid'] as $row ) {
+			$mark = 0 === $row['fatals']
+				? ansi( '✓ clear', '0;32' )
+				: ansi( sprintf( '✗ %d fatal%s', $row['fatals'], 1 === $row['fatals'] ? '' : 's' ), '1;31' );
+			printf( "    %-6s %s\n", $row['version'], $mark );
+		}
+		echo "\n";
+	}
+
+	$safe   = array();
+	$breaks = array();
+	foreach ( $axes as $axis ) {
+		if ( null !== $axis['safe_through'] ) {
+			$safe[] = $axis['label'] . ' ' . $axis['safe_through'];
+		}
+		if ( null !== $axis['first_break'] ) {
+			$n = 0;
+			foreach ( $axis['grid'] as $row ) {
+				if ( $row['version'] === $axis['first_break'] ) {
+					$n = $row['fatals'];
+				}
+			}
+			$breaks[] = sprintf( '%s %s (%d fatal%s)', $axis['label'], $axis['first_break'], $n, 1 === $n ? '' : 's' );
+		}
+	}
+
+	if ( $safe ) {
+		printf( "  %s\n", ansi( '✓ Safe through ' . implode( ' and ', $safe ) . '.', '0;32' ) );
+	}
+	if ( $breaks ) {
+		printf( "  %s\n", ansi( '✗ First break: ' . implode( '; ', $breaks ) . '.', '1;31' ) );
+	}
+	echo "\n";
 }
 
 /**
@@ -1559,7 +1780,7 @@ function apply_config( array $cli ): array {
 	$allowed = array(
 		'php', 'wp', 'since', 'path', 'paths', 'format', 'fail-on', 'ignore-on',
 		'parallel', 'cache', 'ignore', 'only', 'top', 'baseline',
-		'no-default-ignore', 'no-collapse', 'no-cache', 'all',
+		'no-default-ignore', 'no-collapse', 'no-cache', 'all', 'matrix',
 	);
 
 	// Warn (don't fail) on unrecognised keys so a typo'd key — which would

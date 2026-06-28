@@ -21,6 +21,7 @@
 - [Quick start](#quick-start)
 - [All options](#all-options)
 - [Output formats](#output-formats)
+- [Compatibility matrix](#compatibility-matrix)
 - [Large stacks & performance](#large-stacks--performance)
 - [Config file](#config-file)
 - [WP-CLI](#wp-cli)
@@ -178,6 +179,7 @@ On a large `wp-content` the report leads with a **fix-first block** — every `f
 | `--since=<ver>` | With `--wp`: show only what newly deprecates upgrading from this version |
 | `--path=<dir>` | Path to scan (default: cwd). **Repeatable** — pass `--path` more than once, or a comma list, to scan several targets in one pass |
 | `--format=<fmt>` | Output format — see [Output formats](#output-formats) |
+| `--matrix` | Grade the requested target span and report the **highest fatal-free version and the first break** — see [Compatibility matrix](#compatibility-matrix) |
 | `--fail-on=<lvl>` | Exit non-zero when findings at/above this level exist: `fatal` · `risky` · `deprecated` |
 | `--ignore-on=<lvl>` | Hide findings at/below this level (the inverse of `--fail-on`): `fatal` · `risky` · `deprecated` |
 | `--parallel[=N]` | phpcs worker count. **ON by default** (auto CPU cores). `--parallel=1` disables |
@@ -218,6 +220,37 @@ vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content --format=json
 vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content --format=sarif > pressready.sarif
 vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content --format=github
 ```
+
+---
+
+## Compatibility matrix
+
+Instead of asking "does this one target break my site?", `--matrix` answers the question every site owner actually has — **how far can I safely upgrade, and what's the first thing that breaks?** It grades each version in the requested span from a single scan:
+
+```bash
+vendor/bin/pressready --php=7.4-8.4 --matrix --path=wp-content
+```
+
+```
+  Pressready — compatibility matrix — PHP 7.4–8.4
+  Scanned: wp-content
+
+  PHP
+    7.4    ✓ clear
+    8.0    ✗ 1 fatal
+    8.1    ✗ 1 fatal
+    8.2    ✗ 1 fatal
+    8.3    ✗ 1 fatal
+    8.4    ✗ 1 fatal
+
+  ✓ Safe through PHP 7.4.
+  ✗ First break: PHP 8.0 (1 fatal).
+```
+
+- Pass a **range** (`--php=7.4-8.4`) to grade across it; a single `--php=8.4` grades just that version.
+- `--format=json` emits the per-version grid plus `safe_through` / `first_break` for each axis, so CI can consume the ceiling.
+- Honours `--fail-on`: a span containing a fatal exits non-zero.
+- The WP axis is graded too; it lights up as the dataset gains removal data.
 
 ---
 
