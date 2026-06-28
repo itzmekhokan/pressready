@@ -503,6 +503,13 @@ docker run --rm -v "$PWD":/src -w /src ghcr.io/itzmekhokan/pressready:1 \
   --php=8.4 --wp=6.9 --path=wp-content
 ```
 
+The same multi-arch image is mirrored to **Docker Hub** for environments that can't pull from GHCR — swap the registry prefix, everything else is identical:
+
+```bash
+docker run --rm -v "$PWD":/src -w /src docker.io/itzmekhokan/pressready:1 \
+  --php=8.4 --wp=6.9 --path=wp-content
+```
+
 ---
 
 ## GitLab CI

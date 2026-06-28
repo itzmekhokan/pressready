@@ -426,7 +426,7 @@ wp pressready scan --php=8.4 <span class="k">--format=csv</span></pre>
     <p style="margin:10px 0 22px;color:var(--muted);font-size:14.5px">Inputs: <code>config</code> (default <code>.pressready.json</code>) · <code>baseline</code> · <code>fail-on</code> (<code>fatal</code>·<code>risky</code>·<code>deprecated</code>) · <code>format</code> · <code>php</code> · <code>wp</code> · <code>working-directory</code>. Output: <code>exit-code</code>. Pin <code>@v1</code> for the moving major tag or <code>@v1.6.0</code> for an immutable release; the image is pulled pre-built from <code>ghcr.io/itzmekhokan/pressready</code>.</p>
 
     <p style="font-weight:600;margin:0 0 8px;font-size:15px">Run anywhere with Docker</p>
-    <p style="color:var(--muted);font-size:14.5px;margin:0 0 10px">The image is dual-mode: a GitHub Action when GitHub runs it, a plain CLI runner everywhere else — no Composer, no local PHP, no toolchain clash.</p>
+    <p style="color:var(--muted);font-size:14.5px;margin:0 0 10px">The image is dual-mode: a GitHub Action when GitHub runs it, a plain CLI runner everywhere else — no Composer, no local PHP, no toolchain clash. Mirrored to <strong>Docker Hub</strong> (<code>docker.io/itzmekhokan/pressready</code>) for environments that can't pull GHCR.</p>
     <pre>docker run --rm -v "$PWD":/src -w /src ghcr.io/itzmekhokan/pressready:1 \
   <span class="k">--php=8.4 --wp=6.9</span> --path=wp-content</pre>
 
