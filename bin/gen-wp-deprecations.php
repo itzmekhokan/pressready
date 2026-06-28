@@ -42,7 +42,6 @@ const DEPRECATION_CALLS = array(
 	'_deprecated_constructor' => array( 'id' => 0, 'version' => 1, 'replacement' => null, 'kind' => 'constructor' ),
 	'_deprecated_class'       => array( 'id' => 0, 'version' => 1, 'replacement' => 2, 'kind' => 'class' ),
 	'_deprecated_file'        => array( 'id' => 0, 'version' => 1, 'replacement' => 2, 'kind' => 'file' ),
-	'_deprecated_argument'    => array( 'id' => 0, 'version' => 1, 'replacement' => null, 'kind' => 'argument' ),
 	'_deprecated_hook'        => array( 'id' => 0, 'version' => 1, 'replacement' => 2, 'kind' => 'hook', 'id_is_hook' => true ),
 	'apply_filters_deprecated' => array( 'id' => 0, 'version' => 2, 'replacement' => 3, 'kind' => 'hook', 'id_is_hook' => true, 'hook_type' => 'filter' ),
 	'do_action_deprecated'    => array( 'id' => 0, 'version' => 2, 'replacement' => 3, 'kind' => 'hook', 'id_is_hook' => true, 'hook_type' => 'action' ),
@@ -72,7 +71,6 @@ function main( array $argv ): void {
 		'class'    => array(),
 		'file'     => array(),
 		'hook'     => array(),
-		'argument' => array(),
 	);
 	$stats = array( 'files' => 0, 'calls' => 0, 'unresolved' => 0, 'docblock' => 0 );
 
@@ -394,9 +392,6 @@ function record_call( string $fn, array $args, ?string $cur_class, ?string $cur_
 	if ( 'hook' === $bucket && isset( $spec['hook_type'] ) ) {
 		$entry['type'] = $spec['hook_type'];
 	}
-	if ( 'argument' === $bucket ) {
-		$entry['note'] = 'deprecated argument';
-	}
 
 	// First writer wins (earliest declaration); keep the lower version if duplicated.
 	if ( ! isset( $buckets[ $bucket ][ $identifier ] )
@@ -458,13 +453,13 @@ function record_docblock( string $bucket, string $identifier, array $dep, array 
 }
 
 /**
- * Resolve a function/method/class/argument identifier from its arg0 tokens and
- * the enclosing scope (since arg0 is usually __FUNCTION__/__METHOD__/__CLASS__).
+ * Resolve a function/method/class identifier from its arg0 tokens and the
+ * enclosing scope (since arg0 is usually __FUNCTION__/__METHOD__/__CLASS__).
  *
  * @param array|null  $id_arg    arg0 token slice.
  * @param string|null $cur_class Enclosing class.
  * @param string|null $cur_func  Enclosing function/method short name.
- * @param string      $kind      Declared kind ('function'|'class'|'argument').
+ * @param string      $kind      Declared kind ('function'|'class').
  * @return array{0:?string,1:string} [identifier, bucket]
  */
 function resolve_symbol_id( ?array $id_arg, ?string $cur_class, ?string $cur_func, string $kind ): array {
@@ -479,19 +474,19 @@ function resolve_symbol_id( ?array $id_arg, ?string $cur_class, ?string $cur_fun
 		return array( $lit ?: $cur_class, 'class' );
 	}
 
-	// Function / argument kinds.
+	// Function kind.
 	if ( '__METHOD__' === $magic ) {
 		if ( $cur_class && $cur_func ) {
-			return array( "$cur_class::$cur_func", $kind === 'argument' ? 'argument' : 'method' );
+			return array( "$cur_class::$cur_func", 'method' );
 		}
-		return array( $cur_func, $kind === 'argument' ? 'argument' : 'function' );
+		return array( $cur_func, 'function' );
 	}
 	if ( '__FUNCTION__' === $magic ) {
 		// __FUNCTION__ inside a class still names a method.
 		if ( $cur_class ) {
-			return array( "$cur_class::$cur_func", $kind === 'argument' ? 'argument' : 'method' );
+			return array( "$cur_class::$cur_func", 'method' );
 		}
-		return array( $cur_func, $kind === 'argument' ? 'argument' : 'function' );
+		return array( $cur_func, 'function' );
 	}
 	if ( '__CLASS__' === $magic ) {
 		return array( $cur_class, 'class' );
@@ -507,7 +502,7 @@ function resolve_symbol_id( ?array $id_arg, ?string $cur_class, ?string $cur_fun
 			return array( null, $kind );
 		}
 		$is_method = str_contains( $name, '::' );
-		$bucket    = $kind === 'argument' ? 'argument' : ( $is_method ? 'method' : 'function' );
+		$bucket    = $is_method ? 'method' : 'function';
 		return array( $name, $bucket );
 	}
 

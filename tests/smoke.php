@@ -139,5 +139,21 @@ $warn = shell_exec( "$bin --config=" . escapeshellarg( $badcfg ) . " --path=test
 @unlink( $badcfg );
 check( false !== strpos( (string) $warn, "unknown key 'exclud'" ), 'unknown config key warns on stderr' );
 
+// 17. The dataset generator no longer emits an `argument` bucket (issue #1):
+// `_deprecated_argument()` data was generated but never consumed by the sniff,
+// so it must not appear, while a real `_deprecated_function()` still does.
+$gen = escapeshellarg( PHP_BINARY ) . ' ' . escapeshellarg( 'bin/gen-wp-deprecations.php' );
+$out = sys_get_temp_dir() . '/pressready-smoke-gen-' . getmypid() . '.json';
+exec( "$gen --src=" . escapeshellarg( 'tests/fixtures/gen/src' ) . ' --out=' . escapeshellarg( $out ) . ' 2>/dev/null' );
+$ds = json_decode( (string) @file_get_contents( $out ), true );
+@unlink( $out );
+check(
+	is_array( $ds )
+		&& ! isset( $ds['counts']['argument'] )
+		&& ! isset( $ds['deprecations']['argument'] )
+		&& isset( $ds['deprecations']['function']['pressready_fixture_old_function'] ),
+	'generator emits no `argument` bucket but still records deprecated functions'
+);
+
 echo $failures ? "\nSMOKE FAILED ($failures)\n" : "\nALL SMOKE TESTS PASSED\n";
 exit( $failures ? 1 : 0 );
