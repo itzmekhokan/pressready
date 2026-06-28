@@ -200,5 +200,27 @@ check(
 	'delta scan flags a removal in-window even when its deprecation predates --since (got ' . json_encode( $t ) . ')'
 );
 
+// --- issue #4: compatibility matrix (highest safe version / first break) ---
+// upgrade.php uses create_function() — removed in PHP 8.0.
+
+// 24. A span straddling the removal grades each version and names the ceiling +
+// first break: safe through 7.4, first break 8.0.
+$m = json_decode( (string) shell_exec( "$bin --php=7.4-8.4 --matrix --path=tests/fixtures/upgrade.php --no-default-ignore --format=json 2>/dev/null" ), true )['matrix']['php'] ?? array();
+check(
+	'7.4' === ( $m['safe_through'] ?? null ) && '8.0' === ( $m['first_break'] ?? null ),
+	'matrix reports safe-through 7.4 and first-break 8.0 (got ' . json_encode( array( $m['safe_through'] ?? null, $m['first_break'] ?? null ) ) . ')'
+);
+
+// 25. A span entirely below the removal has no break (first_break null, top is safe).
+$m = json_decode( (string) shell_exec( "$bin --php=7.0-7.4 --matrix --path=tests/fixtures/upgrade.php --no-default-ignore --format=json 2>/dev/null" ), true )['matrix']['php'] ?? array();
+check(
+	'7.4' === ( $m['safe_through'] ?? null ) && array_key_exists( 'first_break', $m ) && null === $m['first_break'],
+	'matrix over an all-clear span has no first break (got ' . json_encode( $m['first_break'] ?? 'absent' ) . ')'
+);
+
+// 26. --matrix honours --fail-on for CI: a span containing a fatal exits non-zero.
+exec( "$bin --php=7.4-8.4 --matrix --path=tests/fixtures/upgrade.php --no-default-ignore --fail-on=fatal > /dev/null 2>&1", $_m1, $mrc );
+check( 1 === $mrc, '--matrix --fail-on=fatal exits 1 when the span contains a fatal' );
+
 echo $failures ? "\nSMOKE FAILED ($failures)\n" : "\nALL SMOKE TESTS PASSED\n";
 exit( $failures ? 1 : 0 );
