@@ -60,6 +60,22 @@ class DeprecatedSniff implements Sniff {
 	private $index = null;
 
 	/**
+	 * Per-file cache of symbols the current file declares itself (lowercased),
+	 * split into 'function' and 'class' sets. Used to suppress false positives
+	 * where a component shadows a deprecated core name with its own definition.
+	 *
+	 * @var array{function:array<string,true>,class:array<string,true>}|null
+	 */
+	private $declared = null;
+
+	/**
+	 * Filename the $declared cache was built for.
+	 *
+	 * @var string|null
+	 */
+	private $declaredFile = null;
+
+	/**
 	 * Path to the deprecations dataset JSON. Defaults relative to this file.
 	 *
 	 * @var string
@@ -145,8 +161,11 @@ class DeprecatedSniff implements Sniff {
 			return;
 		}
 
-		// Deprecated function call.
-		if ( $is_call && isset( $this->index()['function'][ $lower ] ) && ! $this->is_namespaced_call( $phpcsFile, $stackPtr, $prev ) ) {
+		// Deprecated function call — unless this file declares its own function of
+		// the same name (a component shadowing the deprecated core symbol).
+		if ( $is_call && isset( $this->index()['function'][ $lower ] )
+			&& ! isset( $this->declared_symbols( $phpcsFile )['function'][ $lower ] )
+			&& ! $this->is_namespaced_call( $phpcsFile, $stackPtr, $prev ) ) {
 			$entry = $this->index()['function'][ $lower ];
 			if ( $this->passes_gate( $entry['deprecated'] ) ) {
 				$this->report( $phpcsFile, $stackPtr, 'DeprecatedFunction', 'Function', $name . '()', $entry );
@@ -183,6 +202,18 @@ class DeprecatedSniff implements Sniff {
 		// Class name precedes `::`.
 		$class = $this->read_name_before( $phpcsFile, $stackPtr );
 		if ( null === $class ) {
+			return;
+		}
+
+		// A component defining its own class of this (unqualified) name shadows the
+		// deprecated core class — neither its static methods nor the class itself
+		// are the core API. Skip both report paths below.
+		$short = $class;
+		$pos   = strrpos( $short, '\\' );
+		if ( false !== $pos ) {
+			$short = substr( $short, $pos + 1 );
+		}
+		if ( isset( $this->declared_symbols( $phpcsFile )['class'][ strtolower( $short ) ] ) ) {
 			return;
 		}
 
@@ -239,7 +270,13 @@ class DeprecatedSniff implements Sniff {
 		if ( false !== $pos ) {
 			$unqualified = substr( $unqualified, $pos + 1 );
 		}
-		$entry = $this->index()['class'][ strtolower( $unqualified ) ] ?? null;
+		$lower = strtolower( $unqualified );
+		// A component defining its own class/interface/trait of this name shadows
+		// the deprecated core class — don't flag its own type.
+		if ( isset( $this->declared_symbols( $phpcsFile )['class'][ $lower ] ) ) {
+			return;
+		}
+		$entry = $this->index()['class'][ $lower ] ?? null;
 		if ( $entry && $this->passes_gate( $entry['deprecated'] ) ) {
 			$this->report( $phpcsFile, $stackPtr, 'DeprecatedClass', 'Class', $unqualified, $entry );
 		}
@@ -385,6 +422,62 @@ class DeprecatedSniff implements Sniff {
 			$i     = $phpcsFile->findPrevious( Tokens::$emptyTokens, $i - 1, null, true );
 		}
 		return '' === $parts ? null : $parts;
+	}
+
+	/**
+	 * Symbols the file being scanned declares itself, so a component that defines
+	 * its own function/class shadowing a deprecated core name is not falsely
+	 * flagged as using the core API.
+	 *
+	 * Scoped to the file (not the whole component): it is deterministic under
+	 * parallel phpcs and never over-suppresses — a file that declares
+	 * `function foo()` genuinely resolves `foo()` to its own definition. Only
+	 * top-level functions count (methods are excluded via hasCondition); a
+	 * shadowed core *class* covers its methods, since a static call only matches
+	 * when the literal class name precedes `::`.
+	 *
+	 * @param File $phpcsFile File.
+	 * @return array{function:array<string,true>,class:array<string,true>}
+	 */
+	private function declared_symbols( File $phpcsFile ) {
+		$file = $phpcsFile->getFilename();
+		if ( $this->declaredFile === $file && null !== $this->declared ) {
+			return $this->declared;
+		}
+
+		$class_like = array( T_CLASS, T_INTERFACE, T_TRAIT );
+		if ( defined( 'T_ANON_CLASS' ) ) {
+			$class_like[] = T_ANON_CLASS;
+		}
+		if ( defined( 'T_ENUM' ) ) {
+			$class_like[] = T_ENUM;
+		}
+
+		$declared = array( 'function' => array(), 'class' => array() );
+		$tokens   = $phpcsFile->getTokens();
+		foreach ( $tokens as $ptr => $tok ) {
+			$code = $tok['code'];
+			if ( T_FUNCTION === $code ) {
+				// A method (inside a class/trait/interface/enum) does not shadow a
+				// global core function — only top-level function declarations do.
+				if ( $phpcsFile->hasCondition( $ptr, $class_like ) ) {
+					continue;
+				}
+				$name = $phpcsFile->getDeclarationName( $ptr );
+				if ( null !== $name && '' !== $name ) {
+					$declared['function'][ strtolower( $name ) ] = true;
+				}
+			} elseif ( in_array( $code, $class_like, true ) ) {
+				$name = $phpcsFile->getDeclarationName( $ptr );
+				if ( null !== $name && '' !== $name ) {
+					$declared['class'][ strtolower( $name ) ] = true;
+				}
+			}
+		}
+
+		$this->declared     = $declared;
+		$this->declaredFile = $file;
+		return $declared;
 	}
 
 	/**
