@@ -69,6 +69,17 @@ On first run it extracts its bundled toolchain to a cache dir; subsequent runs r
 
 > Building from source: `php -d phar.readonly=0 bin/build-phar.php` (after `composer install`) writes `build/pressready.phar`.
 
+### Homebrew (macOS / Linux)
+
+```bash
+brew tap itzmekhokan/pressready
+brew install pressready
+
+pressready --php=8.4 --wp=6.9 --path=wp-content
+```
+
+The formula installs the released `.phar` and runs it with a Homebrew-managed `php` (pulled in as a dependency), so there's nothing else to set up. Upgrade with `brew upgrade pressready`.
+
 ### Composer
 
 Pressready installs in two tiers depending on how new a PHP version you need to target.
