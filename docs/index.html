@@ -280,7 +280,7 @@ vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--ignore-on=deprecated<
     <p style="margin-top:16px;color:var(--muted);font-size:14.5px">
       <code>--format</code>: <code>grouped</code> (default) · <code>table</code> · <code>summary</code> · <code>json</code> · <code>sarif</code> · <code>github</code> · <code>gitlab</code><br>
       <code>--fail-on</code>: <code>fatal</code> · <code>risky</code> · <code>deprecated</code> &nbsp;·&nbsp; <code>--ignore-on</code>: hide findings at/below a level (the inverse)<br>
-      <code>--path</code> is repeatable (or a comma list) to scan several targets in one pass · <code>-h</code>/<code>--help</code> prints the full flag reference.<br>
+      <code>--path</code> is repeatable (or a comma list) to scan several targets in one pass · <code>-h</code>/<code>--help</code> prints the full flag reference · <code>-V</code>/<code>--version</code> prints the version.<br>
       <strong>Exit codes:</strong> <code>0</code> clean · <code>1</code> findings at/above <code>--fail-on</code> · <code>2</code> usage/config error (bad flag, missing path, or zero files scanned — a gate fails loudly instead of passing vacuously).
     </p>
   </div>
@@ -381,6 +381,9 @@ wp pressready scan --php=8.4 --wp=6.9 <span class="k">--fail-on=fatal</span>
 <span class="c"># Delta: only what newly deprecates upgrading from 6.4.</span>
 wp pressready scan --wp=6.9 <span class="k">--since=6.4</span>
 
+<span class="c"># Compatibility matrix: how far can I upgrade, and what breaks first?</span>
+wp pressready scan <span class="k">--php=7.4-8.4 --matrix</span>
+
 <span class="c"># Table format (default), summary, CSV, or count.</span>
 wp pressready scan --php=8.4 <span class="k">--format=table</span>
 wp pressready scan --php=8.4 <span class="k">--format=summary</span>
@@ -437,6 +440,9 @@ wp pressready scan --php=8.4 <span class="k">--format=csv</span></pre>
         <span class="k">--format=gitlab</span> &gt; gl-code-quality-report.json
   <span class="k">artifacts:</span>
     <span class="k">reports:</span> { codequality: gl-code-quality-report.json }</pre>
+
+    <p style="font-weight:600;margin:22px 0 8px;font-size:15px">Other CI &amp; your editor</p>
+    <p style="color:var(--muted);font-size:14.5px;margin:0 0 10px">Any runner that can pull the image gates the same way — <strong>Bitbucket Pipelines</strong> (<code>image: ghcr.io/itzmekhokan/pressready:1</code>) and <strong>Jenkins</strong> (<code>agent { docker { image '…' } }</code>) both run <code>pressready … --fail-on=fatal</code> and honour the exit codes. Pressready is also a phpcs standard, so <strong>VS Code</strong> / <strong>PhpStorm</strong> can surface findings inline — point the phpcs inspection at <code>Pressready/ruleset.xml</code>. See the <a href="https://github.com/itzmekhokan/pressready#other-ci-systems">README</a> for copy-paste recipes.</p>
 
     <p style="font-weight:600;margin:22px 0 8px;font-size:15px">Pre-commit hook <span class="pill plan">optional</span></p>
     <p style="color:var(--muted);font-size:14.5px;margin:0 0 10px">Entirely opt-in — a project adds it to its own <code>.pre-commit-config.yaml</code> to scan staged PHP before each commit. Runs via the image (Docker only) or a <code>repo: local</code> hook pointing at <code>vendor/bin/pressready</code> / <code>pressready.phar</code> (no Docker).</p>

@@ -44,6 +44,9 @@ class Command {
 	 * [--since=<version>]
 	 * : With --wp, only what NEWLY deprecates upgrading from this version.
 	 *
+	 * [--matrix]
+	 * : Grade every version in the target span and report the highest fatal-free version and the first break, instead of the per-finding table.
+	 *
 	 * [--format=<format>]
 	 * : Render as. One of: table, summary, json, csv, yaml, count.
 	 * ---
@@ -98,6 +101,9 @@ class Command {
 	 *     # Big stack: focus on the 10 worst components.
 	 *     $ wp pressready scan --php=8.4 --wp=6.9 --top=10
 	 *
+	 *     # How far can I safely upgrade, and what breaks first?
+	 *     $ wp pressready scan --php=7.4-8.4 --matrix
+	 *
 	 * @param array $args       Positional args (unused).
 	 * @param array $assoc_args Associative args.
 	 * @when before_wp_load
@@ -113,8 +119,27 @@ class Command {
 			WP_CLI::error( 'Specify at least one target: --php=<ver> and/or --wp=<ver>.' );
 		}
 
+		$matrix = ! empty( $assoc_args['matrix'] );
+
 		$result = $this->run_engine( $php, $wp, $since, $path, $assoc_args );
 		$data   = json_decode( $result['json'], true );
+
+		// --matrix produces a different shape ({matrix:{php,wp}}) than the
+		// per-finding {tally, components} report; render it its own way.
+		if ( $matrix ) {
+			if ( ! is_array( $data ) || ! isset( $data['matrix'] ) ) {
+				$detail = ( '' !== ( $result['stderr'] ?? '' ) )
+					? "\n" . $result['stderr']
+					: ' Is the package installed (composer install)?';
+				WP_CLI::error( 'Matrix scan produced no parseable output.' . $detail );
+			}
+			$this->report_matrix( $data['matrix'], $format );
+			if ( 1 === $result['code'] ) {
+				WP_CLI::halt( 1 );
+			}
+			return;
+		}
+
 		if ( ! is_array( $data ) || ! isset( $data['tally'] ) ) {
 			$detail = ( '' !== ( $result['stderr'] ?? '' ) )
 				? "\n" . $result['stderr']
@@ -177,7 +202,7 @@ class Command {
 				$args[] = '--' . $flag . '=' . $assoc_args[ $flag ];
 			}
 		}
-		foreach ( array( 'no-default-ignore', 'no-collapse', 'no-cache' ) as $flag ) {
+		foreach ( array( 'no-default-ignore', 'no-collapse', 'no-cache', 'matrix' ) as $flag ) {
 			if ( ! empty( $assoc_args[ $flag ] ) ) {
 				$args[] = '--' . $flag;
 			}
@@ -258,6 +283,59 @@ class Command {
 			WP_CLI::log( 'No fatals, but review the risky behaviour changes before upgrading.' );
 		} else {
 			WP_CLI::success( 'No fatals — safe to upgrade; clear deprecations at leisure.' );
+		}
+	}
+
+	/**
+	 * Render the compatibility matrix the WP-CLI way: a graded table per axis
+	 * (version / fatals / verdict) plus a safe-through / first-break summary.
+	 *
+	 * @param array  $matrix The {php?, wp?} axis structure from the engine.
+	 * @param string $format Output format (table/json/csv/yaml/count/summary).
+	 * @return void
+	 */
+	private function report_matrix( array $matrix, $format ) {
+		// Machine formats emit ONLY the structured data, no human summary.
+		if ( 'json' === $format ) {
+			WP_CLI::print_value( array( 'matrix' => $matrix ), array( 'format' => 'json' ) );
+			return;
+		}
+		$machine = in_array( $format, array( 'csv', 'yaml', 'count' ), true );
+
+		foreach ( $matrix as $axis ) {
+			$rows = array();
+			foreach ( $axis['grid'] as $cell ) {
+				$fatals = (int) $cell['fatals'];
+				$rows[] = array(
+					'version' => $cell['version'],
+					'fatals'  => $fatals,
+					'verdict' => 0 === $fatals ? 'clear' : 'breaks',
+				);
+			}
+
+			if ( ! $machine ) {
+				WP_CLI::log( WP_CLI::colorize( '%B' . $axis['label'] . '%n' ) );
+			}
+			if ( 'summary' !== $format && $rows ) {
+				Utils\format_items( $machine ? $format : 'table', $rows, array( 'version', 'fatals', 'verdict' ) );
+			}
+
+			if ( $machine ) {
+				continue;
+			}
+
+			$safe  = (string) ( $axis['safe_through'] ?? '' );
+			$break = $axis['first_break'] ?? null;
+			if ( '' !== $safe ) {
+				WP_CLI::success( sprintf( 'Safe through %s %s.', $axis['label'], $safe ) );
+			} else {
+				WP_CLI::warning( sprintf( 'No %s version in the span is fatal-free.', $axis['label'] ) );
+			}
+			if ( null !== $break && '' !== (string) $break ) {
+				WP_CLI::log( sprintf( 'First break: %s %s.', $axis['label'], $break ) );
+			} else {
+				WP_CLI::log( sprintf( 'No break across the requested %s span.', $axis['label'] ) );
+			}
 		}
 	}
 
