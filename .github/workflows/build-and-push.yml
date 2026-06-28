@@ -1,11 +1,17 @@
 name: Build & push action image
 
-# Publish the action's Docker image to GHCR on every version tag, and move the
-# floating major tag (v1) so `uses: itzmekhokan/pressready@v1` always resolves to
-# the latest v1.x release.
+# Publish the action's Docker image to GHCR (and mirror to Docker Hub for orgs
+# that can't pull GHCR) on every version tag, and move the floating major tag
+# (v1) so `uses: itzmekhokan/pressready@v1` always resolves to the latest v1.x
+# release.
+#
+# workflow_dispatch lets you (re)publish an existing release on demand — e.g. to
+# mirror a tag to Docker Hub after the secrets were added — pick the tag via the
+# `ref` input when dispatching.
 on:
   push:
     tags: [ 'v*.*.*' ]
+  workflow_dispatch:
 
 permissions:
   contents: write   # move the floating v<major> git tag
@@ -14,6 +20,10 @@ permissions:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    # Surface the Docker Hub username to step `if:`/`with:` expressions so the
+    # mirror is skipped gracefully on forks that haven't set the secret.
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -25,11 +35,24 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Mirror to Docker Hub for orgs that can't pull GHCR. Skipped when the
+      # secret is absent (forks), so the GHCR publish still succeeds alone.
+      - name: Log in to Docker Hub
+        if: ${{ env.DOCKERHUB_USERNAME != '' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Derive image tags
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/itzmekhokan/pressready
+          # The docker.io image is included only when the mirror secret is set;
+          # metadata-action ignores the resulting empty line otherwise.
+          images: |
+            ghcr.io/itzmekhokan/pressready
+            ${{ env.DOCKERHUB_USERNAME != '' && 'docker.io/itzmekhokan/pressready' || '' }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -54,6 +77,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Move floating major git tag (v1)
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: |
           set -euo pipefail
           MAJOR="${GITHUB_REF_NAME%%.*}"   # v1.3.0 -> v1
@@ -65,6 +89,9 @@ jobs:
   # chance of clashing with their pinned phpcs.
   release-phar:
     runs-on: ubuntu-latest
+    # Only meaningful for a tagged release (uploads to that release); a manual
+    # dispatch against a branch has no release to attach to, so skip it there.
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
