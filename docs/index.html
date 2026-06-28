@@ -191,6 +191,13 @@ chmod +x pressready.phar
 ./pressready.phar <span class="k">--php=8.4 --wp=6.9</span> --path=wp-content</pre>
     <p style="margin-top:12px;color:var(--muted);font-size:14.5px">On first run it extracts its bundled toolchain to a cache dir; later runs reuse it. Every flag works exactly as the Composer-installed CLI.</p>
 
+    <h3 style="margin-top:24px">Homebrew — macOS / Linux</h3>
+    <p style="color:var(--muted);font-size:14.5px">Installs the released PHAR and runs it with a Homebrew-managed <code>php</code> (pulled in as a dependency) — nothing else to set up. Upgrade with <code>brew upgrade pressready</code>.</p>
+    <pre>brew tap itzmekhokan/pressready
+brew install pressready
+
+pressready <span class="k">--php=8.4 --wp=6.9</span> --path=wp-content</pre>
+
     <h3 style="margin-top:24px">Composer</h3>
     <p style="color:var(--muted);font-size:14.5px">Installs the <code>Pressready</code> PHPCS standard automatically via <code>dealerdirect/phpcodesniffer-composer-installer</code>, in two tiers depending on how new a PHP version you need to target.</p>
 
