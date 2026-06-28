@@ -95,6 +95,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history + tags so build-phar.php's `git describe` stamps the
+          # real semver tag into the phar's VERSION (a shallow, tagless checkout
+          # would stamp a bare commit hash instead).
+          fetch-depth: 0
 
       - name: Set up PHP
         uses: shivammathur/setup-php@v2
