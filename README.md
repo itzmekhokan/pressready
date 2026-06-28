@@ -27,6 +27,7 @@
 - [WP-CLI](#wp-cli)
 - [GitHub Actions / CI](#github-actions--ci)
 - [Run anywhere with Docker](#run-anywhere-with-docker)
+- [GitLab CI](#gitlab-ci)
 - [Pre-commit hook (optional)](#pre-commit-hook-optional)
 - [Baseline (legacy sites)](#baseline-legacy-sites)
 - [Exit codes](#exit-codes)
@@ -226,6 +227,7 @@ On a large `wp-content` the report leads with a **fix-first block** — every `f
 | `json` | Machine-readable `{tally, components}` — pipe to `jq` or scripts |
 | `sarif` | SARIF 2.1.0 for code-scanning dashboards (GitHub Advanced Security, etc.) |
 | `github` | GitHub Actions workflow commands — inline PR annotations |
+| `gitlab` | GitLab Code Quality report (Code Climate JSON) — inline MR widget annotations |
 
 ```bash
 # Human formats
@@ -237,6 +239,7 @@ vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content --format=summary
 vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content --format=json
 vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content --format=sarif > pressready.sarif
 vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content --format=github
+vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content --format=gitlab > gl-code-quality-report.json
 ```
 
 ---
@@ -492,6 +495,37 @@ The published image is **dual-mode**: as a GitHub Action it consumes the action 
 ```bash
 docker run --rm -v "$PWD":/src -w /src ghcr.io/itzmekhokan/pressready:1 \
   --php=8.4 --wp=6.9 --path=wp-content
+```
+
+---
+
+## GitLab CI
+
+`--format=gitlab` emits a [Code Quality](https://docs.gitlab.com/ci/testing/code_quality/) report (Code Climate JSON). Publish it as a `codequality` artifact and GitLab renders every finding inline on the merge request — and in the **Code Quality** MR widget — with no extra tooling:
+
+```yaml
+# .gitlab-ci.yml
+pressready:
+  image: ghcr.io/itzmekhokan/pressready:1
+  variables:
+    GITHUB_ACTIONS: ""          # force CLI passthrough mode on the dual-mode image
+  script:
+    - pressready --php=8.4 --wp=6.9 --path=wp-content
+        --format=gitlab > gl-code-quality-report.json
+  artifacts:
+    reports:
+      codequality: gl-code-quality-report.json
+    paths:
+      - gl-code-quality-report.json
+```
+
+To **fail the pipeline** on fatals (the Code Quality report is informational and never fails the job on its own), run a second gate — the report and the gate share one scan if you cache, or just scan twice:
+
+```yaml
+  script:
+    - pressready --php=8.4 --wp=6.9 --path=wp-content
+        --format=gitlab > gl-code-quality-report.json
+    - pressready --php=8.4 --wp=6.9 --path=wp-content --fail-on=fatal
 ```
 
 ---
