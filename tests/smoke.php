@@ -270,5 +270,25 @@ check(
 @unlink( $stub . '/pressready' );
 @rmdir( $stub );
 
+// 29. --format=gitlab emits a valid GitLab Code Quality report: an array of
+// issues each carrying the required description / fingerprint / severity /
+// location fields, with fatals mapped to GitLab's "blocker" severity.
+$gl = json_decode(
+	(string) shell_exec( "$bin --php=8.4 --wp=6.9 --path=tests/fixtures/upgrade.php --no-default-ignore --format=gitlab 2>/dev/null" ),
+	true
+);
+$gl_ok = is_array( $gl ) && ! empty( $gl );
+$fps   = array();
+foreach ( (array) $gl as $iss ) {
+	$gl_ok = $gl_ok
+		&& isset( $iss['description'], $iss['fingerprint'], $iss['severity'], $iss['location']['path'], $iss['location']['lines']['begin'] );
+	$fps[] = $iss['fingerprint'] ?? '';
+}
+$has_blocker = ! empty( $gl ) && in_array( 'blocker', array_column( (array) $gl, 'severity' ), true );
+check(
+	$gl_ok && count( $fps ) === count( array_unique( $fps ) ) && $has_blocker,
+	'--format=gitlab emits valid Code Quality issues (fatal → blocker, unique fingerprints)'
+);
+
 echo $failures ? "\nSMOKE FAILED ($failures)\n" : "\nALL SMOKE TESTS PASSED\n";
 exit( $failures ? 1 : 0 );

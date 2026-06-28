@@ -139,7 +139,7 @@ function main( array $argv ): void {
 	// any pipe/redirect), so pressready renders its own spinner instead while
 	// phpcs runs in the background. Human output only (never JSON/github); auto
 	// on a TTY, and overridable with PRESSREADY_PROGRESS=1|0 for pipes/tests.
-	$human        = ! in_array( $format, array( 'json', 'github', 'sarif' ), true );
+	$human        = ! in_array( $format, array( 'json', 'github', 'sarif', 'gitlab' ), true );
 	$progress_env = getenv( 'PRESSREADY_PROGRESS' );
 	$progress     = $human && function_exists( 'proc_open' ) && (
 		'1' === $progress_env
@@ -281,6 +281,13 @@ function main( array $argv ): void {
 		exit( exit_code( tally( regroup( $data, $root ) ), $opts ) );
 	}
 
+	// GitLab Code Quality: a JSON report GitLab renders inline on merge requests
+	// (the GitLab analogue of --format=github). One issue per finding.
+	if ( 'gitlab' === $format ) {
+		render_gitlab( $data );
+		exit( exit_code( tally( regroup( $data, $root ) ), $opts ) );
+	}
+
 	$grouped = regroup( $data, $root );
 
 	// Component focus for large stacks: --only=<needle> narrows to matching
@@ -327,7 +334,7 @@ Targets:
   --path=<dir>           Path to scan (repeatable; comma lists ok; default: cwd)
 
 Output:
-  --format=<fmt>         grouped (default) | table | summary | json | sarif | github
+  --format=<fmt>         grouped (default) | table | summary | json | sarif | github | gitlab
   --matrix               Grade the target span: highest safe version + first break
   --all                  List every deprecation inline (alias: --verbose)
   --no-collapse          One line per finding instead of collapsing duplicates
@@ -669,6 +676,56 @@ function render_sarif( array $data, string $root ): void {
 		),
 	);
 	echo json_encode( $sarif, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n";
+}
+
+/**
+ * Emit a GitLab Code Quality report (the Code Climate JSON subset GitLab
+ * ingests). GitLab renders these inline on merge requests — the GitLab analogue
+ * of --format=github. One issue per finding, paths repo-root-relative.
+ *
+ * Severity maps onto GitLab's scale: fatal → blocker, risky → major, every
+ * deprecation → minor. Each issue carries a stable fingerprint so GitLab can
+ * track it across commits.
+ *
+ * @param array $data PHPCS JSON report (possibly baseline/ignore-filtered).
+ * @return void
+ */
+function render_gitlab( array $data ): void {
+	static $sev_map = array( 'fatal' => 'blocker', 'risky' => 'major', 'php' => 'minor', 'wp' => 'minor' );
+	$cwd    = (string) getcwd();
+	$issues = array();
+	$seen   = array();
+
+	foreach ( $data['files'] as $file => $info ) {
+		if ( empty( $info['messages'] ) ) {
+			continue;
+		}
+		$rel = ( '' !== $cwd && str_starts_with( $file, $cwd . '/' ) ) ? substr( $file, strlen( $cwd ) + 1 ) : $file;
+		foreach ( $info['messages'] as $m ) {
+			$line = max( 1, (int) ( $m['line'] ?? 1 ) );
+			$src  = (string) ( $m['source'] ?? 'Pressready' );
+			// Stable, unique fingerprint; disambiguate identical findings on a line.
+			$base = md5( $rel . '|' . $line . '|' . $src . '|' . ( $m['message'] ?? '' ) );
+			$fp   = $base;
+			$n    = 1;
+			while ( isset( $seen[ $fp ] ) ) {
+				$fp = md5( $base . '|' . ( ++$n ) );
+			}
+			$seen[ $fp ] = true;
+
+			$issues[] = array(
+				'description' => (string) ( $m['message'] ?? '' ),
+				'check_name'  => $src,
+				'fingerprint' => $fp,
+				'severity'    => $sev_map[ severity_of( $m ) ] ?? 'minor',
+				'location'    => array(
+					'path'  => $rel,
+					'lines' => array( 'begin' => $line ),
+				),
+			);
+		}
+	}
+	echo json_encode( $issues, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES ) . "\n";
 }
 
 /**

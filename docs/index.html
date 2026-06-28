@@ -263,6 +263,9 @@ vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--format=github</span> 
 <span class="c"># SARIF for code-scanning dashboards (GitHub Advanced Security).</span>
 vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--format=sarif</span> --path=. &gt; pressready.sarif
 
+<span class="c"># GitLab Code Quality report — inline MR annotations.</span>
+vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--format=gitlab</span> --path=. &gt; gl-code-quality-report.json
+
 <span class="c"># A PHP upgrade path — everything that breaks across 8.1 → 8.4.</span>
 vendor/bin/pressready <span class="k">--php=8.1-8.4</span> --path=.
 
@@ -275,7 +278,7 @@ vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--all</span> --path=.
 <span class="c"># Drop deprecations from the report and exit code entirely.</span>
 vendor/bin/pressready --php=8.4 --wp=6.9 <span class="k">--ignore-on=deprecated</span> --path=.</pre>
     <p style="margin-top:16px;color:var(--muted);font-size:14.5px">
-      <code>--format</code>: <code>grouped</code> (default) · <code>table</code> · <code>summary</code> · <code>json</code> · <code>sarif</code> · <code>github</code><br>
+      <code>--format</code>: <code>grouped</code> (default) · <code>table</code> · <code>summary</code> · <code>json</code> · <code>sarif</code> · <code>github</code> · <code>gitlab</code><br>
       <code>--fail-on</code>: <code>fatal</code> · <code>risky</code> · <code>deprecated</code> &nbsp;·&nbsp; <code>--ignore-on</code>: hide findings at/below a level (the inverse)<br>
       <code>--path</code> is repeatable (or a comma list) to scan several targets in one pass · <code>-h</code>/<code>--help</code> prints the full flag reference.<br>
       <strong>Exit codes:</strong> <code>0</code> clean · <code>1</code> findings at/above <code>--fail-on</code> · <code>2</code> usage/config error (bad flag, missing path, or zero files scanned — a gate fails loudly instead of passing vacuously).
@@ -424,6 +427,17 @@ wp pressready scan --php=8.4 <span class="k">--format=csv</span></pre>
     <pre>docker run --rm -v "$PWD":/src -w /src ghcr.io/itzmekhokan/pressready:1 \
   <span class="k">--php=8.4 --wp=6.9</span> --path=wp-content</pre>
 
+    <p style="font-weight:600;margin:22px 0 8px;font-size:15px">GitLab CI</p>
+    <p style="color:var(--muted);font-size:14.5px;margin:0 0 10px"><code>--format=gitlab</code> emits a Code Quality (Code Climate JSON) report — publish it as a <code>codequality</code> artifact and GitLab annotates every finding inline on the merge request.</p>
+    <pre><span class="k">pressready:</span>
+  <span class="k">image:</span> ghcr.io/itzmekhokan/pressready:1
+  <span class="k">variables:</span> { GITHUB_ACTIONS: "" }
+  <span class="k">script:</span>
+    - pressready --php=8.4 --wp=6.9 --path=wp-content
+        <span class="k">--format=gitlab</span> &gt; gl-code-quality-report.json
+  <span class="k">artifacts:</span>
+    <span class="k">reports:</span> { codequality: gl-code-quality-report.json }</pre>
+
     <p style="font-weight:600;margin:22px 0 8px;font-size:15px">Pre-commit hook <span class="pill plan">optional</span></p>
     <p style="color:var(--muted);font-size:14.5px;margin:0 0 10px">Entirely opt-in — a project adds it to its own <code>.pre-commit-config.yaml</code> to scan staged PHP before each commit. Runs via the image (Docker only) or a <code>repo: local</code> hook pointing at <code>vendor/bin/pressready</code> / <code>pressready.phar</code> (no Docker).</p>
     <pre><span class="k">repos:</span>
@@ -485,8 +499,8 @@ get_postdata( 1 ); <span class="k">// phpcs:ignore Pressready.WordPress.Deprecat
       <tr><td>6</td><td>Enterprise scale: parallel scanning, result cache, path ignores, duplicate collapsing, <code>--only</code>/<code>--top</code>, <code>.pressready.json</code> config, SARIF output, PHP version ranges, docblock-driven dataset coverage</td><td><span class="pill done">done</span></td></tr>
       <tr><td>7</td><td>Docker GitHub Action (<code>ghcr.io</code> image, <code>@v1</code>) — one-line CI adoption with the PHPCS toolchain baked into the image</td><td><span class="pill done">done</span></td></tr>
       <tr><td>8</td><td>v1.5: compatibility matrix (<code>--matrix</code>); WordPress removed-by-target findings are fatal + dataset-version awareness; single-file <code>pressready.phar</code> distributable</td><td><span class="pill done">done</span></td></tr>
-      <tr><td>9</td><td>Integration tooling: <code>docker run</code> CLI mode &amp; opt-in pre-commit hook</td><td><span class="pill done">done</span></td></tr>
-      <tr><td>10+</td><td>Cross-version <code>removed</code> data; GitLab CI report; DataViews admin report; WP.org distribution</td><td><span class="pill plan">planned</span></td></tr>
+      <tr><td>9</td><td>Integration tooling: <code>docker run</code> CLI mode, opt-in pre-commit hook &amp; GitLab CI Code Quality report (<code>--format=gitlab</code>)</td><td><span class="pill done">done</span></td></tr>
+      <tr><td>10+</td><td>Cross-version <code>removed</code> data; DataViews admin report; WP.org distribution</td><td><span class="pill plan">planned</span></td></tr>
     </table>
   </div>
 </section>
