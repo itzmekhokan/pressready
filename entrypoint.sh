@@ -1,16 +1,27 @@
 #!/usr/bin/env sh
 #
-# Map GitHub Action inputs to PressReady CLI flags and run the scan from the
-# consumer's checkout. PressReady's --format=github renders annotation paths
-# relative to the current directory, so we cd into the workspace first to get
-# correct repo-relative annotations.
+# Dual-mode entrypoint for the PressReady image.
 #
-# Inputs arrive as POSITIONAL ARGS (see action.yml), not INPUT_* env vars: the
-# entrypoint runs under /bin/sh (dash), which drops env vars whose names contain
-# dashes (INPUT_FAIL-ON, INPUT_WORKING-DIRECTORY). The arg order here MUST match
-# the `args:` list in action.yml.
+# Under GitHub Actions (GITHUB_ACTIONS=true), the 7 action inputs arrive as
+# POSITIONAL ARGS (see action.yml) — not INPUT_* env vars, because the entrypoint
+# runs under /bin/sh (dash), which drops env vars whose names contain dashes
+# (INPUT_FAIL-ON, INPUT_WORKING-DIRECTORY). The arg order MUST match action.yml.
+#
+# Anywhere else — `docker run`, a pre-commit docker_image hook, local use — the
+# args are passed straight through to the `pressready` CLI, so the same image
+# doubles as a general-purpose runner:
+#   docker run --rm -v "$PWD":/src -w /src ghcr.io/itzmekhokan/pressready:1 \
+#     --php=8.4 --wp=6.9 --path=wp-content
 set -eu
 
+# CLI passthrough mode (not running inside GitHub Actions).
+if [ "${GITHUB_ACTIONS:-}" != "true" ]; then
+  exec pressready "$@"
+fi
+
+# ---- GitHub Action mode ----
+# PressReady's --format=github renders annotation paths relative to the current
+# directory, so we cd into the workspace first for correct repo-relative paths.
 CONFIG="${1:-}"
 BASELINE="${2:-}"
 FAIL_ON="${3:-}"

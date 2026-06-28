@@ -419,7 +419,21 @@ wp pressready scan --php=8.4 <span class="k">--format=csv</span></pre>
     format: github</pre>
     <p style="margin:10px 0 22px;color:var(--muted);font-size:14.5px">Inputs: <code>config</code> (default <code>.pressready.json</code>) · <code>baseline</code> · <code>fail-on</code> (<code>fatal</code>·<code>risky</code>·<code>deprecated</code>) · <code>format</code> · <code>php</code> · <code>wp</code> · <code>working-directory</code>. Output: <code>exit-code</code>. Pin <code>@v1</code> for the moving major tag or <code>@v1.5.0</code> for an immutable release; the image is pulled pre-built from <code>ghcr.io/itzmekhokan/pressready</code>.</p>
 
-    <p style="font-weight:600;margin:0 0 8px;font-size:15px">Or run the binary yourself</p>
+    <p style="font-weight:600;margin:0 0 8px;font-size:15px">Run anywhere with Docker</p>
+    <p style="color:var(--muted);font-size:14.5px;margin:0 0 10px">The image is dual-mode: a GitHub Action when GitHub runs it, a plain CLI runner everywhere else — no Composer, no local PHP, no toolchain clash.</p>
+    <pre>docker run --rm -v "$PWD":/src -w /src ghcr.io/itzmekhokan/pressready:1 \
+  <span class="k">--php=8.4 --wp=6.9</span> --path=wp-content</pre>
+
+    <p style="font-weight:600;margin:22px 0 8px;font-size:15px">Pre-commit hook <span class="pill plan">optional</span></p>
+    <p style="color:var(--muted);font-size:14.5px;margin:0 0 10px">Entirely opt-in — a project adds it to its own <code>.pre-commit-config.yaml</code> to scan staged PHP before each commit. Runs via the image (Docker only) or a <code>repo: local</code> hook pointing at <code>vendor/bin/pressready</code> / <code>pressready.phar</code> (no Docker).</p>
+    <pre><span class="k">repos:</span>
+  - <span class="k">repo:</span> https://github.com/itzmekhokan/pressready
+    <span class="k">rev:</span> v1.6.0
+    <span class="k">hooks:</span>
+      - <span class="k">id:</span> pressready
+        <span class="k">args:</span> [--php=8.4, --wp=6.9, --path=wp-content]</pre>
+
+    <p style="font-weight:600;margin:22px 0 8px;font-size:15px">Or run the binary yourself</p>
     <div class="two-col">
       <div>
         <p style="font-weight:600;margin:0 0 8px;font-size:15px">Standalone CLI</p>
@@ -471,7 +485,8 @@ get_postdata( 1 ); <span class="k">// phpcs:ignore Pressready.WordPress.Deprecat
       <tr><td>6</td><td>Enterprise scale: parallel scanning, result cache, path ignores, duplicate collapsing, <code>--only</code>/<code>--top</code>, <code>.pressready.json</code> config, SARIF output, PHP version ranges, docblock-driven dataset coverage</td><td><span class="pill done">done</span></td></tr>
       <tr><td>7</td><td>Docker GitHub Action (<code>ghcr.io</code> image, <code>@v1</code>) — one-line CI adoption with the PHPCS toolchain baked into the image</td><td><span class="pill done">done</span></td></tr>
       <tr><td>8</td><td>v1.5: compatibility matrix (<code>--matrix</code>); WordPress removed-by-target findings are fatal + dataset-version awareness; single-file <code>pressready.phar</code> distributable</td><td><span class="pill done">done</span></td></tr>
-      <tr><td>9+</td><td>Cross-version <code>removed</code> data; pre-commit hook &amp; GitLab CI; DataViews admin report; WP.org distribution</td><td><span class="pill plan">planned</span></td></tr>
+      <tr><td>9</td><td>Integration tooling: <code>docker run</code> CLI mode &amp; opt-in pre-commit hook</td><td><span class="pill done">done</span></td></tr>
+      <tr><td>10+</td><td>Cross-version <code>removed</code> data; GitLab CI report; DataViews admin report; WP.org distribution</td><td><span class="pill plan">planned</span></td></tr>
     </table>
   </div>
 </section>

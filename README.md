@@ -26,6 +26,8 @@
 - [Config file](#config-file)
 - [WP-CLI](#wp-cli)
 - [GitHub Actions / CI](#github-actions--ci)
+- [Run anywhere with Docker](#run-anywhere-with-docker)
+- [Pre-commit hook (optional)](#pre-commit-hook-optional)
 - [Baseline (legacy sites)](#baseline-legacy-sites)
 - [Exit codes](#exit-codes)
 - [Per-finding suppression](#per-finding-suppression)
@@ -480,6 +482,62 @@ Composer in an isolated `tools/` project), these recipes still apply.
       --fail-on=fatal \
       --format=github
 ```
+
+---
+
+## Run anywhere with Docker
+
+The published image is **dual-mode**: as a GitHub Action it consumes the action inputs, and anywhere else it passes arguments straight through to the CLI. So the same image is a general-purpose runner — no Composer, no PHP, no toolchain clash:
+
+```bash
+docker run --rm -v "$PWD":/src -w /src ghcr.io/itzmekhokan/pressready:1 \
+  --php=8.4 --wp=6.9 --path=wp-content
+```
+
+---
+
+## Pre-commit hook (optional)
+
+Pressready ships a [pre-commit](https://pre-commit.com) hook so a project **can choose** to scan for newly-introduced PHP/WordPress upgrade-readiness issues before each commit. It is entirely **opt-in** — nothing runs until a project adds it to its own `.pre-commit-config.yaml`. Teams that don't want it simply don't add it.
+
+### Adopt it (Docker — no local PHP needed)
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/itzmekhokan/pressready
+    rev: v1.6.0
+    hooks:
+      - id: pressready
+        args: [--php=8.4, --wp=6.9, --path=wp-content]
+```
+
+```bash
+pre-commit install      # enable the hook in this clone
+git commit …            # the scan now runs on commits that touch PHP
+```
+
+The hook runs via the published Docker image (the PHPCS toolchain is baked in), so it needs only Docker, which pre-commit manages. Omit `args` and commit a `.pressready.json` instead — it's auto-discovered.
+
+### Or without Docker (use your installed binary)
+
+Prefer no Docker? Wire a local hook to the Composer-installed binary or the PHAR — equally opt-in:
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: pressready
+        name: Pressready upgrade-readiness scan
+        entry: vendor/bin/pressready          # or: ./pressready.phar
+        language: system
+        files: \.php$
+        pass_filenames: false
+        args: [--php=8.4, --wp=6.9, --path=wp-content]
+```
+
+> Tune `--fail-on` to taste — e.g. `--fail-on=fatal` blocks the commit only on real breakage and lets deprecations through.
 
 ---
 
