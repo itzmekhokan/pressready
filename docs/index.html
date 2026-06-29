@@ -50,6 +50,15 @@
   nav.sticky .wrap{display:flex;gap:24px;align-items:center;height:48px;overflow-x:auto}
   nav.sticky a{font-size:14px;font-weight:500;color:var(--muted);white-space:nowrap}
   nav.sticky a:hover{color:var(--blue2);text-decoration:none}
+  nav.sticky a.navstar{margin-left:auto;display:inline-flex;align-items:center;gap:6px;background:var(--ink);color:#fff;padding:6px 13px;border-radius:8px;font-weight:600}
+  nav.sticky a.navstar:hover{background:#000;color:#fff;text-decoration:none}
+  .navstar .s,.btn .s{color:var(--amber)}
+
+  /* Star CTA banner */
+  .starcta{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .starcta p{margin:0;font-size:15.5px}
+  .starcta .btn.primary{background:var(--ink);color:#fff}
+  .starcta .btn.primary:hover{background:#000}
 
   /* Sections */
   section{padding:56px 0}
@@ -106,9 +115,9 @@
       <img src="https://img.shields.io/badge/license-GPL--2.0--or--later-blue" alt="License GPL-2.0-or-later">
     </div>
     <div class="cta">
-      <a class="btn primary" href="https://github.com/itzmekhokan/pressready">View on GitHub</a>
+      <a class="btn primary" href="https://github.com/itzmekhokan/pressready" aria-label="Star Pressready on GitHub"><span class="s">★</span> Star on GitHub</a>
+      <a class="btn ghost" href="https://github.com/itzmekhokan/pressready">View on GitHub</a>
       <a class="btn ghost" href="#install">Install</a>
-      <a class="btn ghost" href="#wpcli">WP-CLI</a>
       <a class="btn ghost" href="#roadmap">Roadmap</a>
     </div>
   </div>
@@ -125,6 +134,7 @@
     <a href="#wpcli">WP-CLI</a>
     <a href="#baseline">Baseline &amp; CI</a>
     <a href="#roadmap">Roadmap</a>
+    <a class="navstar" href="https://github.com/itzmekhokan/pressready" aria-label="Star Pressready on GitHub"><span class="s">★</span> Star</a>
   </div>
 </nav>
 
@@ -518,10 +528,19 @@ get_postdata( 1 ); <span class="k">// phpcs:ignore Pressready.WordPress.Deprecat
   </div>
 </section>
 
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="starcta">
+      <p><strong>Found Pressready useful?</strong> A ⭐ helps other WordPress teams find it before their next upgrade — and shapes what ships next.</p>
+      <a class="btn primary" href="https://github.com/itzmekhokan/pressready" aria-label="Star Pressready on GitHub"><span class="s">★</span> Star on GitHub</a>
+    </div>
+  </div>
+</section>
+
 <footer>
   <div class="wrap">
     <p><strong>Pressready</strong> · GPL-2.0-or-later · built by <a href="https://github.com/itzmekhokan">Khokan Sardar</a></p>
-    <p><a href="https://github.com/itzmekhokan/pressready">GitHub</a> · <a href="https://github.com/itzmekhokan/pressready/issues">Issues</a> · <a href="https://packagist.org/packages/itzmekhokan/pressready">Packagist</a></p>
+    <p><a href="https://github.com/itzmekhokan/pressready">★ Star on GitHub</a> · <a href="https://github.com/itzmekhokan/pressready/issues">Issues</a> · <a href="https://packagist.org/packages/itzmekhokan/pressready">Packagist</a></p>
   </div>
 </footer>
 
