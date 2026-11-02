@@ -46,6 +46,15 @@ main( $argv );
  * @param string[] $argv CLI arguments.
  */
 function main( array $argv ): void {
+	// Security audit subcommands. Anything else is the upgrade-readiness scan, so
+	// existing `pressready --php=… --wp=…` invocations are unchanged.
+	$sub = $argv[1] ?? '';
+	if ( 'audit' === $sub || 'update-db' === $sub ) {
+		require_once dirname( __DIR__ ) . '/Pressready/Audit/audit.php';
+		'audit' === $sub ? audit_main( $argv ) : audit_update_db_main( $argv );
+		return;
+	}
+
 	// --help / -h: print usage and exit cleanly, before any target validation.
 	if ( in_array( '--help', $argv, true ) || in_array( '-h', $argv, true ) ) {
 		print_usage();
@@ -412,6 +421,12 @@ Baseline & config:
   --config=<file>                Load defaults from a JSON config file
   -h, --help                     Show this help and exit
   -V, --version                  Print the version and exit
+
+Security audit:
+  pressready audit [--path=<dir>] [--update]
+                         Flag known-vulnerable WordPress core and unpatched or
+                         end-of-life PHP / Node versions (see: audit --help)
+  pressready update-db   Refresh the local advisory snapshot (needs network)
 
 Exit codes:
   0  clean (or no --fail-on threshold tripped)

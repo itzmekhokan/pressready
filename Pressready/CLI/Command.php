@@ -172,6 +172,119 @@ class Command {
 	}
 
 	/**
+	 * Flag known-vulnerable WordPress core and unpatched or end-of-life PHP / Node.
+	 *
+	 * Checks the WordPress core version, the PHP and Node versions the site
+	 * declares (pantheon.yml, .lando.yml, .ddev, Dockerfile, .nvmrc, workflows …)
+	 * and — because this runs on the site's own server — the PHP version actually
+	 * serving it, against a local advisory snapshot built from api.wordpress.org,
+	 * php.net, nodejs.org and endoflife.date.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<path>]
+	 * : Directory to audit. Default: the WordPress install root.
+	 *
+	 * [--update]
+	 * : Refresh the advisory snapshot before auditing (needs network).
+	 *
+	 * [--db=<file>]
+	 * : Advisory snapshot path. Default: ~/.cache/pressready/advisories.json.
+	 *
+	 * [--format=<format>]
+	 * : Render as. One of: table, summary, json, csv, yaml, count.
+	 * ---
+	 * default: table
+	 * options:
+	 *   - table
+	 *   - summary
+	 *   - json
+	 *   - csv
+	 *   - yaml
+	 *   - count
+	 * ---
+	 *
+	 * [--fail-on=<level>]
+	 * : Exit non-zero when findings at/above this level exist. One of: fatal, risky, info.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     # Is this site running anything with a known security hole?
+	 *     $ wp pressready audit --update
+	 *
+	 *     # Nightly gate: fail on known-vulnerable versions.
+	 *     $ wp pressready audit --update --fail-on=fatal
+	 *
+	 * @param array $args       Positional args.
+	 * @param array $assoc_args Associative args.
+	 * @when before_wp_load
+	 */
+	public function audit( $args, $assoc_args ) {
+		$format = (string) ( $assoc_args['format'] ?? 'table' );
+		$path   = (string) ( $args[0] ?? ( defined( 'ABSPATH' ) ? ABSPATH : getcwd() ) );
+
+		$cmd = escapeshellarg( PHP_BINARY ) . ' ' . escapeshellarg( dirname( __DIR__, 2 ) . '/bin/pressready' )
+			. ' audit --format=json --runtime --runtime-php=' . escapeshellarg( PHP_VERSION )
+			. ' --path=' . escapeshellarg( $path );
+		foreach ( array( 'db', 'fail-on' ) as $flag ) {
+			if ( isset( $assoc_args[ $flag ] ) && '' !== (string) $assoc_args[ $flag ] ) {
+				$cmd .= ' ' . escapeshellarg( '--' . $flag . '=' . $assoc_args[ $flag ] );
+			}
+		}
+		if ( ! empty( $assoc_args['update'] ) ) {
+			$cmd .= ' --update';
+		}
+
+		$out     = array();
+		$code    = 0;
+		$errfile = tempnam( sys_get_temp_dir(), 'pressready-cli-' );
+		exec( $cmd . ' 2>' . escapeshellarg( $errfile ), $out, $code );
+		$stderr = is_file( $errfile ) ? trim( (string) file_get_contents( $errfile ) ) : '';
+		@unlink( $errfile );
+
+		$data = json_decode( implode( "\n", $out ), true );
+		if ( ! is_array( $data ) || ! isset( $data['tally'] ) ) {
+			WP_CLI::error( 'Audit produced no parseable output.' . ( '' !== $stderr ? "\n" . $stderr : '' ) );
+		}
+		// Surface warnings (e.g. stale advisory data) without corrupting output.
+		if ( '' !== $stderr ) {
+			WP_CLI::warning( preg_replace( '/^warning:\s*/', '', $stderr ) );
+		}
+
+		if ( 'json' === $format ) {
+			WP_CLI::print_value( $data, array( 'format' => 'json' ) );
+		} else {
+			$rows = array();
+			foreach ( $data['findings'] as $f ) {
+				$rows[] = array(
+					'severity' => $f['severity'],
+					'layer'    => $f['layer'],
+					'version'  => $f['version'],
+					'location' => '' === $f['file'] ? 'runtime' : $f['file'] . ':' . $f['line'],
+					'message'  => $f['message'],
+				);
+			}
+			if ( 'summary' !== $format && $rows ) {
+				Utils\format_items( $format, $rows, array( 'severity', 'layer', 'version', 'location', 'message' ) );
+			}
+			if ( ! in_array( $format, array( 'csv', 'yaml', 'count' ), true ) ) {
+				$t = $data['tally'];
+				if ( ! empty( $t['fatal'] ) ) {
+					WP_CLI::warning( sprintf( '%d known-vulnerable version%s — update now.', $t['fatal'], 1 === (int) $t['fatal'] ? '' : 's' ) );
+				} elseif ( ! empty( $t['risky'] ) ) {
+					WP_CLI::warning( 'No known vulnerabilities, but end-of-life runtimes get no more security fixes.' );
+				} else {
+					WP_CLI::success( sprintf( 'No known-vulnerable or end-of-life versions across %d detected.', count( $data['inventory'] ) ) );
+				}
+			}
+		}
+
+		if ( 1 === $code ) {
+			WP_CLI::halt( 1 );
+		}
+	}
+
+	/**
 	 * Run the shared engine (bin/pressready) and capture its JSON + exit code.
 	 *
 	 * @param string $php        Target PHP version.

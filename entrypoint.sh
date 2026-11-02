@@ -2,7 +2,7 @@
 #
 # Dual-mode entrypoint for the PressReady image.
 #
-# Under GitHub Actions (GITHUB_ACTIONS=true), the 7 action inputs arrive as
+# Under GitHub Actions (GITHUB_ACTIONS=true), the 8 action inputs arrive as
 # POSITIONAL ARGS (see action.yml) — not INPUT_* env vars, because the entrypoint
 # runs under /bin/sh (dash), which drops env vars whose names contain dashes
 # (INPUT_FAIL-ON, INPUT_WORKING-DIRECTORY). The arg order MUST match action.yml.
@@ -29,24 +29,37 @@ FORMAT="${4:-}"
 PHP="${5:-}"
 WP="${6:-}"
 WORKING_DIRECTORY="${7:-}"
+COMMAND="${8:-scan}"
 
 # GitHub mounts the consumer checkout at $GITHUB_WORKSPACE and runs the container
 # there; honour working-directory relative to it.
 cd "${GITHUB_WORKSPACE:-.}/${WORKING_DIRECTORY:-.}"
 
-set -- --format="${FORMAT:-github}"
-
-# Only pass --config when the file is actually present. PressReady exits 2 if
-# --config points at a missing file, but it already auto-discovers .pressready.json
-# from the cwd, so an explicit flag is only needed (and only valid) when the file
-# exists — this lets config-less consumers drive the scan with php/wp inputs alone.
-if [ -n "${CONFIG}" ] && [ -f "${CONFIG}" ]; then
-  set -- "$@" --config="${CONFIG}"
+if [ "${COMMAND}" = "audit" ]; then
+  # Security audit: always refresh the advisory data — a fresh container has
+  # none, and a stale snapshot would hide new security releases.
+  set -- audit --update --format="${FORMAT:-github}"
+  [ -n "${FAIL_ON}" ] && set -- "$@" --fail-on="${FAIL_ON}"
+elif [ "${COMMAND}" = "scan" ]; then
+  set -- --format="${FORMAT:-github}"
+else
+  echo "::error::unknown command input: ${COMMAND} (expected scan or audit)"
+  exit 2
 fi
-[ -n "${BASELINE}" ] && set -- "$@" --baseline="${BASELINE}"
-[ -n "${FAIL_ON}" ]  && set -- "$@" --fail-on="${FAIL_ON}"
-[ -n "${PHP}" ]      && set -- "$@" --php="${PHP}"
-[ -n "${WP}" ]       && set -- "$@" --wp="${WP}"
+
+if [ "${COMMAND}" = "scan" ]; then
+  # Only pass --config when the file is actually present. PressReady exits 2 if
+  # --config points at a missing file, but it already auto-discovers .pressready.json
+  # from the cwd, so an explicit flag is only needed (and only valid) when the file
+  # exists — this lets config-less consumers drive the scan with php/wp inputs alone.
+  if [ -n "${CONFIG}" ] && [ -f "${CONFIG}" ]; then
+    set -- "$@" --config="${CONFIG}"
+  fi
+  [ -n "${BASELINE}" ] && set -- "$@" --baseline="${BASELINE}"
+  [ -n "${FAIL_ON}" ]  && set -- "$@" --fail-on="${FAIL_ON}"
+  [ -n "${PHP}" ]      && set -- "$@" --php="${PHP}"
+  [ -n "${WP}" ]       && set -- "$@" --wp="${WP}"
+fi
 
 # Run the gate without aborting on a non-zero exit so we can surface it as an
 # output and propagate the exact code.

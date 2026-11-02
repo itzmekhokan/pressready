@@ -10,6 +10,8 @@
 
 `vendor/bin/pressready --php=8.4 --wp=6.9 --path=wp-content` runs static analysis across every component and returns a verdict grouped by plugin/theme, with `file:line` and a clear severity for every finding.
 
+`vendor/bin/pressready audit --update` checks the other side: is the site **running** a WordPress, PHP or Node version with a known security hole, or one past end of life? See [Security audit](#security-audit).
+
 **[→ Full documentation](https://itzmekhokan.github.io/pressready/)**
 
 ---
@@ -19,6 +21,7 @@
 - [Severity model](#severity-model)
 - [Install](#install)
 - [Quick start](#quick-start)
+- [Security audit](#security-audit)
 - [All options](#all-options)
 - [Output formats](#output-formats)
 - [Compatibility matrix](#compatibility-matrix)
@@ -199,6 +202,81 @@ On a large `wp-content` the report leads with a **fix-first block** — every `f
 - **Duplicate collapse** — identical findings show once as `(×N)` with a line list (disable with `--no-collapse`)
 - **Colour-coded severities** — red fatal, yellow risky, cyan deprecation (auto-off when piped)
 - **Live progress spinner** — shown on a TTY, suppressed in CI and pipes
+
+---
+
+## Security audit
+
+Security releases land without any change to your code — WordPress 7.1.x
+point releases, PHP's 2026-10-21 security releases, Node's October 2026
+security releases. `pressready audit` tells you whether a site is running a
+version those releases fixed:
+
+```bash
+pressready audit --update                 # refresh advisory data, audit the cwd
+pressready audit --path=/path/to/site     # audit another checkout
+wp pressready audit --update              # on the server: includes the PHP actually serving the site
+```
+
+```
+  ✗ FATAL (2) — known-vulnerable versions; update now:
+      .nvmrc:1  Node 22.20.0 is behind 1 security release (newest: 22.23.4 on 2026-10-20) — update to 22.23.4
+      wp-includes/version.php:5  WordPress 7.1.1 is marked insecure by WordPress.org — update to 7.1.4
+
+  ⚠ RISKY (2) — end-of-life runtimes; no more security fixes:
+      .github/workflows/build.yml:10  Node 18 reached end of life on 2025-04-30 — …; move to a supported branch (24)
+      pantheon.yml:2  PHP 8.1 reached end of life on 2025-12-31 — …; move to a supported branch (8.4)
+```
+
+**What it checks**
+
+| Layer | Versions found in | Flagged when |
+|---|---|---|
+| WordPress core | `wp-includes/version.php` (any layout: root, `wp/`, `web/wp/`, `app/public/` …), `composer.lock` (`roots/wordpress`, `johnpbloch/wordpress-core` …), `wordpress:x.y.z` images | WordPress.org marks the version **insecure** (`fatal`); not the current release (`info`) |
+| PHP | `pantheon.yml`, `.lando.yml`, `.ddev/config.yaml`, Dockerfile / compose images, `.tool-versions`, `composer.json` `config.platform.php`, `php-version:` in workflows, the running PHP (`--runtime`, always on under WP-CLI) | An exact version is behind a **security release** on its branch (`fatal`); the branch is past **end of life** (`risky`) |
+| Node | `.nvmrc`, `.node-version`, `.tool-versions`, `package.json` `volta.node`, `.ddev`, Dockerfile / compose images, `node-version:` in workflows, `--runtime` | Same as PHP |
+
+A branch-only declaration (`php_version: 8.3`, `.nvmrc` `22`) lets the host pick
+the patch level, so it can only be checked for end of life — use `--runtime` (or
+`wp pressready audit` on the server) to check the real patch level. Third-party
+plugins under `wp-content/plugins`, `vendor/` and `node_modules/` are skipped.
+
+**Advisory data.** `pressready update-db` (or `audit --update`) fetches public,
+keyless feeds — [api.wordpress.org stable-check](https://api.wordpress.org/core/stable-check/1.0/),
+[php.net releases](https://www.php.net/releases/index.php?json&version=8),
+[nodejs.org/dist](https://nodejs.org/dist/index.json) and
+[endoflife.date](https://endoflife.date) — into one local snapshot
+(`~/.cache/pressready/advisories.json`; override with `--db` or
+`PRESSREADY_AUDIT_DB`). The audit itself is offline and warns when the snapshot
+is more than 3 days old.
+
+**Options:** `--path` (repeatable), `--update`, `--db`, `--runtime`,
+`--runtime-php=<ver>`, `--runtime-node=<ver>`, `--format` (`grouped`, `summary`,
+`json`, `sarif`, `github`, `gitlab`), `--fail-on` (`fatal`, `risky`, `info`).
+Exit codes match the scan: `0` clean, `1` threshold tripped, `2` usage error
+(including no versions found and no advisory data).
+
+**Run it nightly.** A pull-request check never sees a new security release, so
+schedule the audit on the default branch as well:
+
+```yaml
+name: Security audit
+on:
+  schedule: [ { cron: '0 6 * * *' } ]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: itzmekhokan/pressready@v1
+        with:
+          command: audit
+          fail-on: fatal
+          format: github
+```
 
 ---
 
@@ -416,6 +494,7 @@ checkout, so per-repo scope (target PHP/WP + `paths`) is unchanged.
 | `php` | — | Override the target PHP version/range (else taken from config), e.g. `8.4` or `8.1-8.4`. |
 | `wp` | — | Override the target WP version (else taken from config), e.g. `6.9`. |
 | `working-directory` | `.` | Directory to scan from, relative to the checkout. |
+| `command` | `scan` | `scan` (upgrade readiness) or `audit` ([security audit](#security-audit) — refreshes advisory data, then uses `fail-on`, `format` and `working-directory`). |
 
 #### Output
 
@@ -709,7 +788,9 @@ get_postdata( 1 );                      // phpcs:ignore Pressready.WordPress.Dep
 | 5 | `wp pressready scan` WP-CLI command | ✅ done |
 | 6 | Enterprise scale: parallel, cache, path ignores, duplicate collapsing, `--only`/`--top`, config file, SARIF, PHP ranges, docblock dataset coverage | ✅ done |
 | 7 | Docker GitHub Action (`ghcr.io` image, `@v1`) — one-line CI adoption with the PHPCS toolchain baked into the image | ✅ done |
-| 8+ | DataViews admin report; fix-hint links; WP.org distribution | planned |
+| 8 | `pressready audit`: known-vulnerable WordPress core, PHP and Node versions + end-of-life runtimes, from public advisory feeds | ✅ done |
+| 9 | Audit: known-vulnerable plugins and themes (vulnerability feed), first-party WPCS security sniffs | planned |
+| 10+ | DataViews admin report; fix-hint links; WP.org distribution | planned |
 
 ---
 

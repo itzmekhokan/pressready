@@ -355,5 +355,74 @@ if ( '' !== $wp_bin ) {
 	echo "  – wp pressready --matrix test skipped (no wp binary)\n";
 }
 
+// --- Security audit (`pressready audit` / `update-db`) ---
+// update-db reads offline copies of the advisory feeds (PRESSREADY_AUDIT_FEEDS_DIR),
+// so these tests never touch the network. The fixture site pins known-bad versions.
+$feeds = 'PRESSREADY_AUDIT_FEEDS_DIR=' . escapeshellarg( __DIR__ . '/fixtures/audit/feeds' );
+$adb   = sys_get_temp_dir() . '/pressready-smoke-audit-' . getmypid() . '.json';
+$site  = '--path=tests/fixtures/audit/site';
+
+// 32. update-db normalises the feeds: security releases only, newest first,
+// pre-releases dropped, branches seeded from the EOL data.
+exec( "$feeds $bin update-db --db=" . escapeshellarg( $adb ) . ' > /dev/null 2>&1', $_ud, $udrc );
+$db = json_decode( (string) @file_get_contents( $adb ), true );
+check(
+	0 === $udrc
+		&& '8.3.36' === ( $db['php']['branches']['8.3']['security_releases'][0]['version'] ?? null )
+		&& 2 === count( $db['php']['branches']['8.3']['security_releases'] ?? array() )
+		&& '22.23.4' === ( $db['node']['branches']['22']['security_releases'][0]['version'] ?? null )
+		&& ! isset( $db['node']['branches']['25'] )
+		&& 'insecure' === ( $db['wordpress']['versions']['7.1.1'] ?? null ),
+	'update-db writes a normalised advisory snapshot'
+);
+
+// 33. The audit flags exactly the known-bad versions: insecure WordPress and a
+// Node patch behind a security release (fatal), EOL PHP and Node (risky). The
+// vendored plugin's .nvmrc and wp-includes/other.php are not inventoried.
+$audit = "$bin audit --db=" . escapeshellarg( $adb ) . " $site";
+$aj    = json_decode( (string) shell_exec( "$audit --format=json 2>/dev/null" ), true );
+$ids   = array_map( static fn( $f ) => $f['id'] . '@' . $f['version'], $aj['findings'] ?? array() );
+sort( $ids );
+check(
+	array( 'fatal' => 2, 'risky' => 2, 'info' => 0, 'total' => 4 ) === ( $aj['tally'] ?? null )
+		&& array( 'node-eol@18', 'node-security-release@22.20.0', 'php-eol@8.1', 'wordpress-insecure@7.1.1' ) === $ids
+		&& 7 === count( $aj['inventory'] ?? array() ),
+	'audit flags insecure WP, unpatched Node and EOL runtimes (got ' . json_encode( $ids ) . ')'
+);
+
+// 34. --fail-on gates on audit severities; a clean subtree passes.
+exec( "$audit --fail-on=fatal > /dev/null 2>&1", $_a1, $arc1 );
+exec( "$bin audit --db=" . escapeshellarg( $adb ) . ' --path=tests/fixtures/audit/site/wp-content/themes/brand --fail-on=info > /dev/null 2>&1', $_a2, $arc2 );
+check( 1 === $arc1 && 0 === $arc2, "audit --fail-on exits 1 on findings, 0 on a clean tree (got $arc1/$arc2)" );
+
+// 35. --runtime-php audits the running PHP's exact patch level.
+$aj = json_decode( (string) shell_exec( "$bin audit --db=" . escapeshellarg( $adb ) . ' --path=tests/fixtures/audit/site/wp-content/themes/brand --runtime-php=8.3.10 --format=json 2>/dev/null' ), true );
+$f  = $aj['findings'][0] ?? array();
+check(
+	'php-security-release' === ( $f['id'] ?? null ) && '8.3.36' === ( $f['fixed_in'] ?? null ) && '' === ( $f['file'] ?? null ),
+	'--runtime-php flags a runtime behind a security release (got ' . json_encode( $f['id'] ?? null ) . ')'
+);
+
+// 36. SARIF from the audit has the 2.1.0 shape with one result per finding.
+$sarif = json_decode( (string) shell_exec( "$audit --format=sarif 2>/dev/null" ), true );
+check(
+	'2.1.0' === ( $sarif['version'] ?? null ) && 4 === count( $sarif['runs'][0]['results'] ?? array() ),
+	'audit --format=sarif emits one SARIF result per finding'
+);
+
+// 37. Missing advisory data is a usage error (exit 2), never a vacuous pass.
+exec( "$bin audit --db=" . escapeshellarg( $adb . '.missing' ) . " $site > /dev/null 2>&1", $_a3, $arc3 );
+check( 2 === $arc3, 'audit without advisory data exits 2' );
+
+// 38. A snapshot older than the staleness window warns on stderr.
+$db['generated_at'] = gmdate( 'c', time() - 10 * 86400 );
+file_put_contents( $adb, json_encode( $db ) );
+$err = (string) shell_exec( "$audit 2>&1 1>/dev/null" );
+check( false !== strpos( $err, 'advisory data is 10 days old' ), 'stale advisory data warns on stderr' );
+@unlink( $adb );
+
+// 39. The WP-CLI command class exposes audit().
+check( method_exists( 'Pressready\\CLI\\Command', 'audit' ), 'WP-CLI command exposes audit()' );
+
 echo $failures ? "\nSMOKE FAILED ($failures)\n" : "\nALL SMOKE TESTS PASSED\n";
 exit( $failures ? 1 : 0 );
