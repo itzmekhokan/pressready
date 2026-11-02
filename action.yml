@@ -33,6 +33,10 @@ inputs:
     description: Directory to scan from, relative to the checkout (defaults to repo root).
     required: false
     default: '.'
+  command:
+    description: scan (upgrade readiness, the default) or audit (known-vulnerable WordPress core and unpatched / end-of-life PHP and Node; refreshes advisory data first, then uses fail-on, format and working-directory).
+    required: false
+    default: scan
 outputs:
   exit-code:
     description: PressReady exit code (0 clean, 1 findings at/above threshold, 2 usage/config error).
@@ -53,3 +57,4 @@ runs:
     - ${{ inputs.php }}
     - ${{ inputs.wp }}
     - ${{ inputs.working-directory }}
+    - ${{ inputs.command }}
