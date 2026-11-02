@@ -1,5 +1,12 @@
-# The image installs PressReady from Packagist (see Dockerfile), so the build
-# context only needs the Dockerfile + entrypoint.sh. Keep everything else out so
-# the build context stays tiny and image builds stay fast.
+# The image builds PressReady from this checkout (see Dockerfile). Allow only
+# what the runtime needs, so the build context stays small and nothing local
+# (vendor/, build/, .git) leaks into the image.
 *
+!bin/
+!Pressready/
+!data/
+!composer.json
+!composer.lock
+!wp-cli.php
 !entrypoint.sh
+!LICENSE

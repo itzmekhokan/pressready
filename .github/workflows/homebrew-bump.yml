@@ -8,6 +8,10 @@ name: Bump Homebrew formula
 # Requires repo secret HOMEBREW_TAP_TOKEN: a PAT with `contents: write` +
 # `pull-requests: write` on itzmekhokan/homebrew-pressready (the built-in
 # GITHUB_TOKEN can't push to a different repository).
+#
+# Values from the event/inputs are passed to `run:` blocks through `env:` and
+# never interpolated into the script with ${{ }}, so a crafted tag name can't
+# inject shell commands.
 on:
   release:
     types: [ published ]
@@ -17,16 +21,27 @@ on:
         description: Release tag to bump the formula to (e.g. v1.6.0)
         required: true
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 jobs:
   bump:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions: {} # everything here uses HOMEBREW_TAP_TOKEN, not GITHUB_TOKEN
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
     steps:
-      - name: Resolve target tag
-        id: tag
-        run: echo "tag=${{ github.event.release.tag_name || inputs.tag }}" >> "$GITHUB_OUTPUT"
+      - name: Validate tag
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::not a release tag: ${TAG}"
+            exit 1
+          fi
 
       # The phar is attached by a parallel job on the tag push, so on a fresh
       # release it may not be there the instant this fires — poll briefly.
@@ -34,8 +49,7 @@ jobs:
         id: phar
         run: |
           set -euo pipefail
-          tag="${{ steps.tag.outputs.tag }}"
-          url="https://github.com/itzmekhokan/pressready/releases/download/${tag}/pressready.phar"
+          url="https://github.com/itzmekhokan/pressready/releases/download/${TAG}/pressready.phar"
           for attempt in $(seq 1 20); do
             if curl -fsSL "$url" -o pressready.phar; then
               break
@@ -43,45 +57,49 @@ jobs:
             echo "phar not available yet (attempt ${attempt}); waiting…"
             sleep 15
           done
-          test -s pressready.phar || { echo "::error::pressready.phar never appeared on ${tag}"; exit 1; }
+          test -s pressready.phar || { echo "::error::pressready.phar never appeared on ${TAG}"; exit 1; }
           echo "url=${url}" >> "$GITHUB_OUTPUT"
           echo "sha=$(sha256sum pressready.phar | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Checkout tap
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           repository: itzmekhokan/homebrew-pressready
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: tap
+          persist-credentials: false
 
       - name: Update the formula
+        env:
+          URL: ${{ steps.phar.outputs.url }}
+          SHA: ${{ steps.phar.outputs.sha }}
         run: |
           set -euo pipefail
           f="tap/Formula/pressready.rb"
-          sed -i -E "s|^  url \".*\"|  url \"${{ steps.phar.outputs.url }}\"|" "$f"
-          sed -i -E "s|^  sha256 \".*\"|  sha256 \"${{ steps.phar.outputs.sha }}\"|" "$f"
+          sed -i -E "s|^  url \".*\"|  url \"${URL}\"|" "$f"
+          sed -i -E "s|^  sha256 \".*\"|  sha256 \"${SHA}\"|" "$f"
           echo "--- updated formula head ---"
           sed -n '1,15p' "$f"
 
+      # The checkout keeps no credentials, so push with the tap token explicitly.
       - name: Open bump PR on the tap
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           set -euo pipefail
           cd tap
-          tag="${{ steps.tag.outputs.tag }}"
-          branch="bump-${tag}"
+          branch="bump-${TAG}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           if git diff --quiet; then
-            echo "Formula already at ${tag}; nothing to bump."
+            echo "Formula already at ${TAG}; nothing to bump."
             exit 0
           fi
           git checkout -b "$branch"
-          git commit -aqm "pressready ${tag}"
-          git push -fu origin "$branch"
+          git commit -aqm "pressready ${TAG}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/itzmekhokan/homebrew-pressready.git" "$branch"
           gh pr create --repo itzmekhokan/homebrew-pressready \
-            --title "pressready ${tag}" \
-            --body "Automated formula bump for [\`${tag}\`](https://github.com/itzmekhokan/pressready/releases/tag/${tag}). URL and sha256 updated from the released \`pressready.phar\`." \
+            --title "pressready ${TAG}" \
+            --body "Automated formula bump for [\`${TAG}\`](https://github.com/itzmekhokan/pressready/releases/tag/${TAG}). URL and sha256 updated from the released \`pressready.phar\`." \
             --head "$branch" --base main \
             || echo "PR already exists for ${branch}."

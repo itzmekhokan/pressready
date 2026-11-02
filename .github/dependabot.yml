@@ -1,0 +1,39 @@
+# Keep pinned dependencies current without letting a freshly published (and
+# possibly compromised) release in on day one. The cooldown holds version
+# updates for 7 days; security updates are not delayed by it. Grouping keeps
+# it to one PR per ecosystem per week.
+version: 2
+updates:
+  # Actions are pinned to commit SHAs; Dependabot bumps the SHA and the
+  # trailing `# vX.Y.Z` comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: [ '*' ]
+
+  # composer.lock pins the toolchain bundled into the phar and the image.
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      composer:
+        patterns: [ '*' ]
+
+  # Base images in the Dockerfile are pinned by digest.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      docker:
+        patterns: [ '*' ]

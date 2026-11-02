@@ -5,6 +5,12 @@ name: Build & push action image
 # (v1) so `uses: itzmekhokan/pressready@v1` always resolves to the latest v1.x
 # release.
 #
+# Every published artifact is verifiable:
+#   - the image gets a SLSA build-provenance attestation (pushed to the registry)
+#     and a keyless cosign signature, both tied to this workflow run;
+#   - pressready.phar gets a build-provenance attestation.
+# Consumers check them with `gh attestation verify` / `cosign verify` (see README).
+#
 # workflow_dispatch lets you (re)publish an existing release on demand — e.g. to
 # mirror a tag to Docker Hub after the secrets were added — pick the tag via the
 # `ref` input when dispatching.
@@ -13,23 +19,35 @@ on:
     tags: [ 'v*.*.*' ]
   workflow_dispatch:
 
-permissions:
-  contents: write   # move the floating v<major> git tag
-  packages: write   # push to GHCR
+# Deny-by-default token; each job grants only what it needs.
+permissions: {}
+
+# Never cancel a release half-way; queue a second run for the same ref instead.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write     # move the floating v<major> git tag
+      packages: write     # push the image (and its attestation) to GHCR
+      id-token: write     # OIDC identity for keyless signing + attestation
+      attestations: write # record the build-provenance attestation
     # Surface the Docker Hub username to step `if:`/`with:` expressions so the
     # mirror is skipped gracefully on forks that haven't set the secret.
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -39,14 +57,14 @@ jobs:
       # secret is absent (forks), so the GHCR publish still succeeds alone.
       - name: Log in to Docker Hub
         if: ${{ env.DOCKERHUB_USERNAME != '' }}
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Derive image tags
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           # The docker.io image is included only when the mirror secret is set;
           # metadata-action ignores the resulting empty line otherwise.
@@ -62,53 +80,91 @@ jobs:
       # manifest — pullable on GitHub-hosted (amd64) and Apple Silicon / arm64
       # self-hosted runners alike.
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
+      # The image is built from this checkout (not pulled from Packagist), so
+      # the provenance below truthfully names the commit that went into it.
       - name: Build & push image
-        uses: docker/build-push-action@v6
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PRESSREADY_VERSION=${{ github.ref_name }}
 
+      - name: Attest image build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/itzmekhokan/pressready
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # Keyless signing: the signature binds the image digest to this workflow's
+      # OIDC identity, recorded in the public Rekor transparency log. Signed by
+      # digest so it covers every tag pointing at this build.
+      - name: Sign image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "ghcr.io/itzmekhokan/pressready@${DIGEST}"
+          if [ -n "${DOCKERHUB_USERNAME}" ]; then
+            cosign sign --yes "docker.io/itzmekhokan/pressready@${DIGEST}"
+          fi
+
+      # The checkout keeps no credentials, so push with the job token explicitly.
       - name: Move floating major git tag (v1)
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           MAJOR="${GITHUB_REF_NAME%%.*}"   # v1.3.0 -> v1
           git tag -f "$MAJOR"
-          git push origin -f "refs/tags/$MAJOR"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/tags/$MAJOR"
 
   # Build the single-file distributable and attach it to the GitHub release, so
   # consumers can `curl -L .../pressready.phar` with no composer install and no
   # chance of clashing with their pinned phpcs.
   release-phar:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Only meaningful for a tagged release (uploads to that release); a manual
     # dispatch against a branch has no release to attach to, so skip it there.
     if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    permissions:
+      contents: write     # upload the phar to the release
+      id-token: write     # OIDC identity for the attestation
+      attestations: write # record the build-provenance attestation
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # Full history + tags so build-phar.php's `git describe` stamps the
           # real semver tag into the phar's VERSION (a shallow, tagless checkout
           # would stamp a bare commit hash instead).
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.3'
           ini-values: phar.readonly=0
 
       # Install with dev deps so the phar bundles the pre-release WP compat engine
-      # (PHP 8.2–8.4 detection), mirroring the action image.
+      # (PHP 8.2–8.4 detection), mirroring the action image. composer.lock pins
+      # every package, so the phar is built from a reviewed dependency set.
       - name: Install toolchain
         run: composer install --no-interaction --no-progress
 
@@ -117,6 +173,11 @@ jobs:
 
       - name: Smoke-test the phar
         run: php build/pressready.phar --php=8.4 --wp=6.9 --path=tests/fixtures/upgrade.php --no-default-ignore --format=summary
+
+      - name: Attest phar build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: build/pressready.phar
 
       - name: Attach phar to the release
         env:

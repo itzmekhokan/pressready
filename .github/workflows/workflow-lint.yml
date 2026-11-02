@@ -1,0 +1,66 @@
+name: Workflow lint
+
+# Static checks for the GitHub Actions workflows themselves — the part of the
+# repo that holds release credentials. Modelled on wordpress-develop's
+# reusable-workflow-lint.yml:
+#   - actionlint: syntax, expression and type errors, plus shellcheck on every
+#     `run:` block (the actionlint image bundles shellcheck).
+#   - zizmor: security audit (template injection, over-broad permissions,
+#     persisted credentials, unpinned actions, ...). Results go to the
+#     repository's Security → Code scanning tab as SARIF.
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/**'
+      - 'action.yml'
+  pull_request:
+    paths:
+      - '.github/**'
+      - 'action.yml'
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      # Image pinned by digest (rhysd/actionlint:1.7.12), so a re-pushed tag
+      # can't change what runs here.
+      - name: Run actionlint
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo \
+            rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 \
+            -color
+
+  zizmor:
+    name: zizmor
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to code scanning
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        with:
+          version: 1.31.1
+          persona: regular
