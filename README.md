@@ -34,6 +34,7 @@
 - [Baseline (legacy sites)](#baseline-legacy-sites)
 - [Exit codes](#exit-codes)
 - [Per-finding suppression](#per-finding-suppression)
+- [Security & verifying releases](#security--verifying-releases)
 - [Roadmap](#roadmap)
 
 ---
@@ -442,9 +443,30 @@ jobs:
           format: github
 ```
 
-> Pin to `@v1` for the moving major tag, or `@v1.0.0` for an immutable release.
-> The image is published to `ghcr.io/itzmekhokan/pressready` and pulled pre-built,
-> so runs don't rebuild it.
+> `@v1` follows the moving major tag. The image is published to
+> `ghcr.io/itzmekhokan/pressready` and pulled pre-built, so runs don't rebuild it.
+> Note that the action always pulls the floating `:1` image — pinning the action
+> to a tag or commit SHA does **not** pin the image. For a fully pinned gate, see
+> the next section.
+
+#### Strict pinning (fully immutable gate)
+
+To run an exact, verified build — nothing that can change under you — call the
+image directly by digest and override its entrypoint so arguments go straight to
+the CLI:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: docker://ghcr.io/itzmekhokan/pressready@sha256:<digest> # 1.7.0
+  with:
+    entrypoint: pressready
+    args: --php=8.4 --wp=6.9 --path=wp-content --baseline=.pressready-baseline.json --fail-on=fatal --format=github
+```
+
+Look up a release's digest with
+`docker buildx imagetools inspect ghcr.io/itzmekhokan/pressready:1.7.0`, and
+check it was built by this repo's release workflow before pinning it (see
+[Security & verifying releases](#security--verifying-releases)).
 
 ### Raw CLI recipes
 
@@ -520,6 +542,8 @@ The same multi-arch image is mirrored to **Docker Hub** for environments that ca
 docker run --rm -v "$PWD":/src -w /src docker.io/itzmekhokan/pressready:1 \
   --php=8.4 --wp=6.9 --path=wp-content
 ```
+
+From 1.7.0 every image is signed and carries a build-provenance attestation — see [Security & verifying releases](#security--verifying-releases).
 
 ---
 
@@ -698,6 +722,36 @@ get_postdata( 1 );                      // phpcs:ignore Pressready.WordPress.Dep
 
 ---
 
+## Security & verifying releases
+
+Report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
+
+From **1.7.0**, every release artifact is built by this repo's
+[release workflow](.github/workflows/build-and-push.yml) and can be verified
+before you run it:
+
+```bash
+# The phar: confirm it was built from this repo by GitHub Actions.
+gh attestation verify pressready.phar --repo itzmekhokan/pressready
+
+# The Docker image: build-provenance attestation…
+gh attestation verify oci://ghcr.io/itzmekhokan/pressready:1.7.0 --repo itzmekhokan/pressready
+
+# …and its keyless cosign signature.
+cosign verify ghcr.io/itzmekhokan/pressready:1.7.0 \
+  --certificate-identity-regexp '^https://github\.com/itzmekhokan/pressready/\.github/workflows/build-and-push\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+The project's own supply chain: every GitHub Action is pinned to a commit SHA,
+workflow tokens are deny-by-default, dependencies are locked in `composer.lock`
+and audited in CI, Docker base images are pinned by digest, Dependabot proposes
+updates after a 7-day cooldown, and every workflow change is checked by
+[actionlint](https://github.com/rhysd/actionlint) and
+[zizmor](https://github.com/zizmorcore/zizmor).
+
+---
+
 ## Roadmap
 
 | Phase | Scope | Status |
@@ -709,6 +763,7 @@ get_postdata( 1 );                      // phpcs:ignore Pressready.WordPress.Dep
 | 5 | `wp pressready scan` WP-CLI command | ✅ done |
 | 6 | Enterprise scale: parallel, cache, path ignores, duplicate collapsing, `--only`/`--top`, config file, SARIF, PHP ranges, docblock dataset coverage | ✅ done |
 | 7 | Docker GitHub Action (`ghcr.io` image, `@v1`) — one-line CI adoption with the PHPCS toolchain baked into the image | ✅ done |
+| v1.7 | Supply-chain hardening: SHA-pinned actions, locked deps, signed + attested phar and image, workflow linting | ✅ done |
 | 8+ | DataViews admin report; fix-hint links; WP.org distribution | planned |
 
 ---
